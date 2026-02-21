@@ -180,7 +180,7 @@ pub fn tick_match_time(
     mut match_game: ResMut<HostMatchGame>,
     network_tx: Res<NetworkSender>,
 ) {
-    if match_game.0.is_waiting() {
+    if match_game.0.is_waiting() || match_game.0.pending_set_piece.is_some() {
         return;
     }
 
