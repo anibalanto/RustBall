@@ -111,7 +111,8 @@ pub fn spawn_physics(
         slide_cube: slide_cube_entity,
         id,
         name: name.clone(),
-        kick_charge: Vec2::ZERO,
+        kick_vec: Vec2::ZERO,
+        is_straight_kick: false,
         kick_charging: false,
         kick_memory_timer: 0.0,
         peer_id,
@@ -218,8 +219,9 @@ pub fn handle_collision_player(
 }
 
 // Sistema de carga de patada
-// kick_charge.x = potencia (0 a 1)
-// kick_charge.y = dirección de curva (+1.0 derecha, -1.0 izquierda, 0.0 sin curva)
+// straight_kick (X): kick_vec.x crece (potencia), kick_vec.y = 0, is_straight_kick = true
+// NSEO (WASD): kick_vec crece en la dirección nseo, is_straight_kick = false
+// power = kick_vec.length() en ambos casos
 pub fn charge_kick(
     game_input: Res<GameInputManager>,
     mut players: Query<&mut Player>,
@@ -233,34 +235,32 @@ pub fn charge_kick(
 
         let player_id = player.id;
 
-        // Cualquiera de los 3 botones inicia la carga
         let kick_pressed = game_input.is_pressed(player_id, GameAction::Kick);
-        let curve_left_pressed = game_input.is_pressed(player_id, GameAction::CurveLeft);
-        let curve_right_pressed = game_input.is_pressed(player_id, GameAction::CurveRight);
+        let curve_dir = game_input.get_curve_dir(player_id);
+        let has_curve = curve_dir.length() > 0.01;
 
-        let any_kick_button = kick_pressed || curve_left_pressed || curve_right_pressed;
-        let just_pressed_kick = game_input.just_pressed(player_id, GameAction::Kick);
-        let just_pressed_left = game_input.just_pressed(player_id, GameAction::CurveLeft);
-        let just_pressed_right = game_input.just_pressed(player_id, GameAction::CurveRight);
-        let just_pressed = just_pressed_kick || just_pressed_left || just_pressed_right;
+        let any_kick_button = kick_pressed || has_curve;
 
-        if just_pressed {
+        // Iniciar carga cuando se presiona por primera vez (sin carga activa)
+        if !player.kick_charging && any_kick_button {
             player.kick_charging = true;
-            player.kick_charge = Vec2::ZERO;
+            player.kick_vec = Vec2::ZERO;
+            player.is_straight_kick = kick_pressed && !has_curve;
         }
 
         if any_kick_button && player.kick_charging {
-            player.kick_charge.x += 2.0 * time.delta_secs();
-            if player.kick_charge.x > 1.0 {
-                player.kick_charge.x = 1.0;
-            }
-            // Establecer dirección de curva
-            if curve_right_pressed {
-                player.kick_charge.y = -1.0;
-            } else if curve_left_pressed {
-                player.kick_charge.y = 1.0;
+            let delta = 2.0 * time.delta_secs();
+            if player.is_straight_kick {
+                // Acumular potencia en kick_vec.x
+                player.kick_vec.x = (player.kick_vec.x + delta).min(1.0);
             } else {
-                player.kick_charge.y = 0.0;
+                // Acumular kick_vec en la dirección NSEO; length() = potencia
+                let dir = if has_curve {
+                    curve_dir
+                } else {
+                    player.kick_vec.normalize_or_zero()
+                };
+                player.kick_vec = (player.kick_vec + dir * delta).clamp_length_max(1.0);
             }
         }
     }
@@ -268,7 +268,6 @@ pub fn charge_kick(
 
 // Sistema que prepara el kick: memoriza la carga cuando sueltas el botón
 // El kick real se aplica en detect_contact_and_kick cuando hay contacto
-// kick_charge.x = potencia, kick_charge.y = dirección curva (+1 derecha, -1 izquierda)
 pub fn prepare_kick_ball(game_input: Res<GameInputManager>, mut player_query: Query<&mut Player>) {
     for mut player in player_query.iter_mut() {
         // No preparar kick en modo cubo
@@ -278,16 +277,16 @@ pub fn prepare_kick_ball(game_input: Res<GameInputManager>, mut player_query: Qu
 
         let player_id = player.id;
 
-        let any_kick_button = game_input.is_pressed(player_id, GameAction::Kick)
-            || game_input.is_pressed(player_id, GameAction::CurveLeft)
-            || game_input.is_pressed(player_id, GameAction::CurveRight);
+        let kick_pressed = game_input.is_pressed(player_id, GameAction::Kick);
+        let curve_dir = game_input.get_curve_dir(player_id);
+        let any_kick_button = kick_pressed || curve_dir.length() > 0.01;
 
         let should_release_kick = !any_kick_button && player.kick_charging;
 
         if should_release_kick {
             player.kick_charging = false;
 
-            if player.kick_charge.x > 0.0 {
+            if player.kick_vec.length() > 0.0 {
                 // Memorizar la potencia por 1 segundo
                 // El kick se aplicará cuando haya contacto con la pelota
                 player.kick_memory_timer = 1.0;
@@ -501,7 +500,7 @@ pub fn detect_contact_and_kick(
         }
 
         // Solo aplicar si hay carga memorizada y no está cargando activamente
-        if player.kick_charge.x <= 0.0 || player.kick_charging {
+        if player.kick_vec.length() <= 0.0 || player.kick_charging {
             continue;
         }
 
@@ -513,16 +512,20 @@ pub fn detect_contact_and_kick(
                 if distance < contact_radius && distance > 1.0 {
                     let kick_dir = diff.truncate().normalize_or_zero();
 
-                    apply_kick(
-                        kick_dir,
-                        player.kick_charge,
-                        &config,
-                        &mut impulse,
-                        &mut ball,
-                    );
+                    let power = player.kick_vec.length();
+                    let spin = if player.is_straight_kick {
+                        0.0
+                    } else {
+                        // perp_dot(kick_dir, nseo_dir) da el spin para curvar en dirección absoluta
+                        kick_dir.perp_dot(player.kick_vec.normalize_or_zero())
+                    };
+                    let kick_charge = Vec2::new(power, spin);
+
+                    apply_kick(kick_dir, kick_charge, &config, &mut impulse, &mut ball);
 
                     // Consumir la carga
-                    player.kick_charge = Vec2::ZERO;
+                    player.kick_vec = Vec2::ZERO;
+                    player.is_straight_kick = false;
                     player.kick_memory_timer = 0.0;
                 }
             }
@@ -533,9 +536,10 @@ pub fn detect_contact_and_kick(
 // Sistema para decrementar el timer de potencia memorizada
 pub fn update_kick_memory_timer(time: Res<Time>, mut player_query: Query<&mut Player>) {
     for mut player in player_query.iter_mut() {
-        // Cancelar en modo cubo o con StopInteract
+        // Cancelar en modo cubo
         if player.mode_cube_active {
-            player.kick_charge = Vec2::ZERO;
+            player.kick_vec = Vec2::ZERO;
+            player.is_straight_kick = false;
             player.kick_memory_timer = 0.0;
             continue;
         }
@@ -544,7 +548,8 @@ pub fn update_kick_memory_timer(time: Res<Time>, mut player_query: Query<&mut Pl
         if player.kick_memory_timer > 0.0 {
             player.kick_memory_timer -= time.delta_secs();
             if player.kick_memory_timer <= 0.0 {
-                player.kick_charge = Vec2::ZERO;
+                player.kick_vec = Vec2::ZERO;
+                player.is_straight_kick = false;
                 player.kick_memory_timer = 0.0;
             }
         }
@@ -568,7 +573,7 @@ pub fn auto_touch_ball_while_running(
         }
 
         // Solo si hay carga memorizada, el kick lo maneja detect_contact_and_kick
-        if player.kick_charge.x > 0.0 && !player.kick_charging {
+        if player.kick_vec.length() > 0.0 && !player.kick_charging {
             continue;
         }
 
@@ -703,7 +708,7 @@ pub fn toggle_mode(
     }
 }
 
-// Sistema de barrida en modo cubo: Kick adelante, CurveLeft 45° izq, CurveRight 45° der
+// Sistema de barrida en modo cubo: Kick adelante o en dirección NSEO si hay input de comba
 pub fn detect_slide(
     game_input: Res<GameInputManager>,
     config: Res<GameConfig>,
@@ -718,11 +723,12 @@ pub fn detect_slide(
         }
 
         // Detectar dirección de barrida
-        let forward = game_input.just_pressed(player.id, GameAction::Kick);
-        let left_45 = game_input.just_pressed(player.id, GameAction::CurveLeft);
-        let right_45 = game_input.just_pressed(player.id, GameAction::CurveRight);
+        let kick_pressed = game_input.just_pressed(player.id, GameAction::Kick);
+        let curve_dir = game_input.get_curve_dir(player.id);
+        let has_curve = curve_dir.length() > 0.01;
+        let any_slide_trigger = kick_pressed || has_curve;
 
-        if !forward && !left_45 && !right_45 {
+        if !any_slide_trigger {
             continue;
         }
 
@@ -735,23 +741,11 @@ pub fn detect_slide(
             let (_, _, angle) = transform.rotation.to_euler(EulerRot::XYZ);
             let base_dir = Vec2::new(angle.cos(), angle.sin());
 
-            // Calcular dirección final según la tecla
-            let slide_dir = if forward {
-                base_dir
-            } else if left_45 {
-                // Rotar 45° a la izquierda
-                let angle_45 = std::f32::consts::FRAC_PI_2;
-                Vec2::new(
-                    base_dir.x * angle_45.cos() - base_dir.y * angle_45.sin(),
-                    base_dir.x * angle_45.sin() + base_dir.y * angle_45.cos(),
-                )
+            // Si hay input NSEO, deslizar en esa dirección; sino, hacia adelante
+            let slide_dir = if has_curve {
+                curve_dir.normalize_or_zero()
             } else {
-                // Rotar 45° a la derecha
-                let angle_45 = -std::f32::consts::FRAC_PI_2;
-                Vec2::new(
-                    base_dir.x * angle_45.cos() - base_dir.y * angle_45.sin(),
-                    base_dir.x * angle_45.sin() + base_dir.y * angle_45.cos(),
-                )
+                base_dir
             };
 
             player.is_sliding = true;

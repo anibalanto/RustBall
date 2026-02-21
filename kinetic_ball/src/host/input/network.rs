@@ -29,9 +29,7 @@ impl InputSource for NetworkInputSource {
             GameAction::MoveDown => self.current.move_down,
             GameAction::MoveLeft => self.current.move_left,
             GameAction::MoveRight => self.current.move_right,
-            GameAction::Kick => self.current.kick,
-            GameAction::CurveLeft => self.current.curve_left,
-            GameAction::CurveRight => self.current.curve_right,
+            GameAction::Kick => self.current.straight_kick,
             GameAction::StopInteract => self.previous.stop_interact,
             GameAction::Dash => self.current.dash,
             GameAction::Sprint => self.current.sprint,
@@ -46,9 +44,7 @@ impl InputSource for NetworkInputSource {
             GameAction::MoveDown => self.previous.move_down,
             GameAction::MoveLeft => self.previous.move_left,
             GameAction::MoveRight => self.previous.move_right,
-            GameAction::Kick => self.previous.kick,
-            GameAction::CurveLeft => self.previous.curve_left,
-            GameAction::CurveRight => self.previous.curve_right,
+            GameAction::Kick => self.previous.straight_kick,
             GameAction::StopInteract => self.previous.stop_interact,
             GameAction::Dash => self.previous.dash,
             GameAction::Sprint => self.previous.sprint,
@@ -64,15 +60,17 @@ impl InputSource for NetworkInputSource {
             GameAction::MoveDown => self.previous.move_down,
             GameAction::MoveLeft => self.previous.move_left,
             GameAction::MoveRight => self.previous.move_right,
-            GameAction::Kick => self.previous.kick,
-            GameAction::CurveLeft => self.previous.curve_left,
-            GameAction::CurveRight => self.previous.curve_right,
+            GameAction::Kick => self.previous.straight_kick,
             GameAction::StopInteract => self.previous.stop_interact,
             GameAction::Dash => self.previous.dash,
             GameAction::Sprint => self.previous.sprint,
             GameAction::Mode => self.previous.mode,
         };
         !current && previous
+    }
+
+    fn get_curve_dir(&self) -> bevy::math::Vec2 {
+        self.current.nseo_vec
     }
 
     fn update(&mut self) {

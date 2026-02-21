@@ -136,15 +136,15 @@ pub fn animate_keys(
                 let is_pressed = if let Some(lp) = local_player {
                     match &lp.input_device {
                         InputDevice::Keyboard => {
-                            // Usar keybindings de teclado
                             let key_code = match key_visual.action {
-                                CurveAction::Left => keybindings.curve_left.0,
-                                CurveAction::Right => keybindings.curve_right.0,
+                                CurveAction::North => keybindings.curve_north.0,
+                                CurveAction::South => keybindings.curve_south.0,
+                                CurveAction::East  => keybindings.curve_east.0,
+                                CurveAction::West  => keybindings.curve_west.0,
                             };
                             keyboard_input.pressed(key_code)
                         }
                         InputDevice::RawGamepad(gamepad_id) => {
-                            // Usar bindings del gamepad
                             if let Some(ref gilrs_instance) = gilrs_guard {
                                 if let Some(gamepad) = gilrs_instance.connected_gamepad(*gamepad_id)
                                 {
@@ -155,8 +155,10 @@ pub fn animate_keys(
                                         .unwrap_or_default();
 
                                     let binding = match key_visual.action {
-                                        CurveAction::Left => &bindings.curve_left,
-                                        CurveAction::Right => &bindings.curve_right,
+                                        CurveAction::North => &bindings.curve_north,
+                                        CurveAction::South => &bindings.curve_south,
+                                        CurveAction::East  => &bindings.curve_east,
+                                        CurveAction::West  => &bindings.curve_west,
                                     };
 
                                     is_gamepad_binding_active(gamepad, binding)

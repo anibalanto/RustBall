@@ -8,8 +8,8 @@ use crate::assets::EmbeddedAssets;
 use crate::color_utils::{generate_unique_player_color, get_team_colors};
 use crate::components::{
     CurveAction, InGameEntity, Interpolated, KickChargeBar, KickChargeBarCurveLeft,
-    KickChargeBarCurveRight, PlayerNameText, PlayerOutline, PlayerSprite, RemoteBall,
-    RemotePlayer, SlideCubeVisual, StaminChargeBar,
+    KickChargeBarCurveRight, PlayerNameText, PlayerOutline, PlayerSprite, RemoteBall, RemotePlayer,
+    SlideCubeVisual, StaminChargeBar,
 };
 use crate::events::{SpawnBallEvent, SpawnPlayerEvent};
 use crate::game::spawn_key_visual_2d;
@@ -119,7 +119,8 @@ pub fn handle_spawn_player(
                     id: ps.id,
                     name: ps.name.clone(),
                     team_index: ps.team_index,
-                    kick_charge: ps.kick_charge,
+                    kick_vec: ps.kick_vec,
+                    is_straight_kick: ps.is_straight_kick,
                     is_sliding: ps.is_sliding,
                     not_interacting: ps.not_interacting,
                     base_color: player_color,
@@ -273,75 +274,113 @@ pub fn handle_spawn_player(
                     RenderLayers::layer(0),
                 ));
 
-                // Indicadores de teclas/botones de curva (solo para jugador local)
+                // Indicadores de teclas NSEO (solo para jugador local)
                 let local_player_opt = local_players
                     .players
                     .iter()
                     .find(|lp| lp.server_player_id == Some(ps.id));
 
-                let (curve_left_text, curve_right_text) =
-                    if let Some(local_player) = local_player_opt {
-                        match &local_player.input_device {
-                            InputDevice::RawGamepad(_) => {
-                                let gamepad_bindings = local_player
-                                    .gamepad_type_name
-                                    .as_ref()
-                                    .map(|name| gamepad_bindings_map.get_bindings(name))
-                                    .unwrap_or_default();
+                let (text_n, text_s, text_e, text_w) = if let Some(local_player) = local_player_opt
+                {
+                    match &local_player.input_device {
+                        InputDevice::RawGamepad(_) => {
+                            let gamepad_bindings = local_player
+                                .gamepad_type_name
+                                .as_ref()
+                                .map(|name| gamepad_bindings_map.get_bindings(name))
+                                .unwrap_or_default();
 
-                                let left = gamepad_bindings
-                                    .curve_left
+                            (
+                                gamepad_bindings
+                                    .curve_north
                                     .map(|b| b.display_name())
-                                    .unwrap_or_else(|| "?".to_string());
-                                let right = gamepad_bindings
-                                    .curve_right
+                                    .unwrap_or_else(|| "?".to_string()),
+                                gamepad_bindings
+                                    .curve_south
                                     .map(|b| b.display_name())
-                                    .unwrap_or_else(|| "?".to_string());
-                                (left, right)
-                            }
-                            _ => (
-                                key_code_display_name(keybindings.curve_left.0),
-                                key_code_display_name(keybindings.curve_right.0),
-                            ),
+                                    .unwrap_or_else(|| "?".to_string()),
+                                gamepad_bindings
+                                    .curve_east
+                                    .map(|b| b.display_name())
+                                    .unwrap_or_else(|| "?".to_string()),
+                                gamepad_bindings
+                                    .curve_west
+                                    .map(|b| b.display_name())
+                                    .unwrap_or_else(|| "?".to_string()),
+                            )
                         }
-                    } else {
-                        (
-                            key_code_display_name(keybindings.curve_left.0),
-                            key_code_display_name(keybindings.curve_right.0),
-                        )
-                    };
+                        _ => (
+                            key_code_display_name(keybindings.curve_north.0),
+                            key_code_display_name(keybindings.curve_south.0),
+                            key_code_display_name(keybindings.curve_east.0),
+                            key_code_display_name(keybindings.curve_west.0),
+                        ),
+                    }
+                } else {
+                    (
+                        key_code_display_name(keybindings.curve_north.0),
+                        key_code_display_name(keybindings.curve_south.0),
+                        key_code_display_name(keybindings.curve_east.0),
+                        key_code_display_name(keybindings.curve_west.0),
+                    )
+                };
 
+                /*
+                let r = config.sphere_radius;
                 let angle_90 = std::f32::consts::FRAC_PI_2;
 
-                // Tecla/boton izquierda (curve_left)
+                // Norte (W) - arriba
                 spawn_key_visual_2d(
                     parent,
-                    &curve_left_text,
+                    &text_n,
                     ps.id,
-                    CurveAction::Left,
-                    Vec3::new(
-                        config.sphere_radius / 2.0,
-                        -config.sphere_radius * 2.0,
-                        50.0,
-                    ),
-                    Quat::from_rotation_z(-angle_90),
+                    CurveAction::North,
+                    Vec3::new(0.0, r * 2.5, 50.0),
+                    Quat::IDENTITY,
                     &mut meshes,
                     &mut materials,
-                    private_player_layers.clone(),
+                    preview_player_layers.clone(),
                 );
 
-                // Tecla/boton derecha (curve_right)
+                // Sur (S) - abajo
                 spawn_key_visual_2d(
                     parent,
-                    &curve_right_text,
+                    &text_s,
                     ps.id,
-                    CurveAction::Right,
-                    Vec3::new(config.sphere_radius / 2.0, config.sphere_radius * 2.0, 50.0),
+                    CurveAction::South,
+                    Vec3::new(0.0, -r * 2.5, 50.0),
+                    Quat::IDENTITY,
+                    &mut meshes,
+                    &mut materials,
+                    preview_player_layers.clone(),
+                );
+
+                // Este (D) - derecha
+                spawn_key_visual_2d(
+                    parent,
+                    &text_e,
+                    ps.id,
+                    CurveAction::East,
+                    Vec3::new(r * 2.5, 0.0, 50.0),
                     Quat::from_rotation_z(-angle_90),
                     &mut meshes,
                     &mut materials,
-                    private_player_layers.clone(),
+                    preview_player_layers.clone(),
                 );
+
+                // Oeste (A) - izquierda
+                spawn_key_visual_2d(
+                    parent,
+                    &text_w,
+                    ps.id,
+                    CurveAction::West,
+                    Vec3::new(-r * 2.5, 0.0, 50.0),
+                    Quat::from_rotation_z(-angle_90),
+                    &mut meshes,
+                    &mut materials,
+                    preview_player_layers.clone(),
+                );
+                 */
             });
     }
 }

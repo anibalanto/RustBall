@@ -333,7 +333,8 @@ pub fn process_network_messages(mut params: NetworkParams, mut queries: NetworkQ
                     interp.target_rotation = ps.rotation;
                     transform.translation.x = ps.position.x;
                     transform.translation.y = ps.position.y;
-                    rp.kick_charge = ps.kick_charge;
+                    rp.kick_vec = ps.kick_vec;
+                    rp.is_straight_kick = ps.is_straight_kick;
                     rp.is_sliding = ps.is_sliding;
                     rp.ball_target_position = ps.ball_target_position;
                     rp.stamin_charge = ps.stamin_charge;

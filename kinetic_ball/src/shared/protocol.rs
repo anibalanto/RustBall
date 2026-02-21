@@ -183,9 +183,10 @@ pub struct PlayerInput {
     pub move_down: bool,
     pub move_left: bool,
     pub move_right: bool,
-    pub kick: bool,
-    pub curve_left: bool,
-    pub curve_right: bool,
+    pub straight_kick: bool, // Botón X → el servidor acumula potencia en kick_vec.x
+    /// Dirección NSEO raw por frame (WASD digital normalizado o joystick analógico -1..1).
+    /// El servidor usa este vector para acumular kick_vec en la dirección de comba.
+    pub nseo_vec: Vec2,
     pub stop_interact: bool,
     pub dash: bool,
     pub sprint: bool,
@@ -251,7 +252,10 @@ pub struct PlayerState {
     pub position: Vec2,
     pub velocity: (f32, f32),
     pub rotation: f32,
-    pub kick_charge: Vec2, // x = potencia, y = curva
+    /// Vector de carga acumulado. kick_vec.x = potencia (straight_kick); o Vec2 en dirección NSEO.
+    /// length() = potencia en ambos modos.
+    pub kick_vec: Vec2,
+    pub is_straight_kick: bool, // true si la carga fue iniciada con X (sin comba)
     pub kick_charging: bool,
     pub is_sliding: bool,
     pub not_interacting: bool,

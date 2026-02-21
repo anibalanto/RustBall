@@ -40,7 +40,10 @@ pub fn update_charge_bar(
     let max_outline_thickness = 7.0;
 
     for (player, children) in player_query.iter() {
-        let charge_pct = player.kick_charge.x; // De 0.0 a 1.0
+        let charge_pct = player.kick_vec.length(); // De 0.0 a 1.0
+
+        // Dirección de comba normalizada (para barras direccionales)
+        let nseo = player.kick_vec.normalize_or_zero();
 
         for child in children.iter() {
             // --- Lógica de Sprites (Barras) ---
@@ -48,10 +51,12 @@ pub fn update_charge_bar(
                 if bar_main_q.contains(child) {
                     sprite.custom_size = Some(Vec2::new(max_width * charge_pct, 5.0));
                 } else if bar_left_q.contains(child) {
-                    let coef = if player.kick_charge.y < 0.0 { 0.5 } else { 0.0 };
+                    // Barra izquierda: componente Oeste (nseo.x negativo)
+                    let coef = (-nseo.x).max(0.0) * 0.5;
                     sprite.custom_size = Some(Vec2::new(max_width * charge_pct * coef, 5.0));
                 } else if bar_right_q.contains(child) {
-                    let coef = if player.kick_charge.y > 0.0 { 0.5 } else { 0.0 };
+                    // Barra derecha: componente Este (nseo.x positivo)
+                    let coef = nseo.x.max(0.0) * 0.5;
                     sprite.custom_size = Some(Vec2::new(max_width * charge_pct * coef, 5.0));
                 }
             }

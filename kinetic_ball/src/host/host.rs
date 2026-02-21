@@ -234,6 +234,13 @@ impl GameInputManager {
             .unwrap_or(false)
     }
 
+    pub fn get_curve_dir(&self, player_id: u32) -> Vec2 {
+        self.sources
+            .get(&player_id)
+            .map(|s| s.get_curve_dir())
+            .unwrap_or(Vec2::ZERO)
+    }
+
     pub fn tick(&mut self) {
         for source in self.sources.values_mut() {
             InputSource::update(source);
@@ -254,7 +261,11 @@ pub struct Player {
     pub slide_cube: Entity, // Referencia al cubo de dirección/slide
     pub id: u32,
     pub name: String,
-    pub kick_charge: Vec2, // x = potencia, y = curva (positivo derecha, negativo izquierda)
+    /// Vector de carga acumulado.
+    /// straight_kick: kick_vec.x crece (potencia), kick_vec.y = 0.
+    /// NSEO: kick_vec crece en dirección nseo_vec; length() = potencia.
+    pub kick_vec: Vec2,
+    pub is_straight_kick: bool, // true si la carga fue iniciada con X (sin comba)
     pub kick_charging: bool,
     pub kick_memory_timer: f32, // Timer de 1 segundo para potencia memorizada
     pub peer_id: PeerId,        // Matchbox peer ID para enviar mensajes

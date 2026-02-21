@@ -76,7 +76,8 @@ pub struct RemotePlayer {
     pub id: u32,
     pub name: String,
     pub team_index: u8,
-    pub kick_charge: Vec2, // x = potencia, y = curva
+    pub kick_vec: Vec2,      // straight: x crece; NSEO: crece en dirección; length() = potencia
+    pub is_straight_kick: bool,
     pub is_sliding: bool,
     pub not_interacting: bool,
     pub base_color: Color,
@@ -149,8 +150,10 @@ pub struct MinimapPlayerName {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum CurveAction {
-    Left,
-    Right,
+    North,
+    South,
+    East,
+    West,
 }
 
 #[derive(Component)]

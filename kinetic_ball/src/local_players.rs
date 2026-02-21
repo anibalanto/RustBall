@@ -286,14 +286,21 @@ pub fn read_keyboard_input(
     let modifier = keyboard.pressed(KeyCode::ControlLeft);
     let wildcard_pressed = keyboard.pressed(keybindings.wildcard.0);
 
+    // Construir nseo_vec desde WASD (NSEO) como Vec2 normalizado
+    let mut curve = bevy::math::Vec2::ZERO;
+    if keyboard.pressed(keybindings.curve_north.0) { curve.y += 1.0; }
+    if keyboard.pressed(keybindings.curve_south.0) { curve.y -= 1.0; }
+    if keyboard.pressed(keybindings.curve_east.0)  { curve.x += 1.0; }
+    if keyboard.pressed(keybindings.curve_west.0)  { curve.x -= 1.0; }
+    let nseo_vec = curve.normalize_or_zero();
+
     PlayerInput {
         move_up: keyboard.pressed(keybindings.move_up.0),
         move_down: keyboard.pressed(keybindings.move_down.0),
         move_left: keyboard.pressed(keybindings.move_left.0),
         move_right: keyboard.pressed(keybindings.move_right.0),
-        kick: keyboard.pressed(keybindings.kick.0) && !modifier,
-        curve_left: keyboard.pressed(keybindings.curve_left.0),
-        curve_right: keyboard.pressed(keybindings.curve_right.0),
+        straight_kick: keyboard.pressed(keybindings.kick.0) && !modifier,
+        nseo_vec,
         stop_interact: wildcard_pressed && !is_cube_mode,
         dash: wildcard_pressed && is_cube_mode,
         sprint: keyboard.pressed(keybindings.sprint.0) && !modifier,
@@ -323,10 +330,18 @@ pub fn read_bevy_gamepad_input(
     let move_down = left_stick_y < -DEADZONE;
 
     // Botones principales
-    let kick = gamepad.pressed(GamepadButton::South); // A/Cross
-    let curve_right = gamepad.pressed(GamepadButton::East); // B/Circle
-    let curve_left = gamepad.pressed(GamepadButton::West); // X/Square
+    let straight_kick = gamepad.pressed(GamepadButton::South); // A/Cross
     let mode = gamepad.pressed(GamepadButton::North); // Y/Triangle
+
+    // Joystick analógico derecho para dirección de comba (nseo_vec)
+    let right_stick_x = gamepad.get(GamepadAxis::RightStickX).unwrap_or(0.0);
+    let right_stick_y = gamepad.get(GamepadAxis::RightStickY).unwrap_or(0.0);
+    let right_stick = bevy::math::Vec2::new(right_stick_x, right_stick_y);
+    let nseo_vec = if right_stick.length() > DEADZONE {
+        right_stick.normalize()
+    } else {
+        bevy::math::Vec2::ZERO
+    };
 
     // Triggers y hombros
     let left_trigger_axis = gamepad.get(GamepadAxis::LeftZ).unwrap_or(0.0);
@@ -347,9 +362,8 @@ pub fn read_bevy_gamepad_input(
         move_down,
         move_left,
         move_right,
-        kick,
-        curve_left,
-        curve_right,
+        straight_kick,
+        nseo_vec,
         stop_interact: wildcard_pressed && !is_cube_mode,
         dash: wildcard_pressed && is_cube_mode,
         sprint,
@@ -418,7 +432,7 @@ fn read_raw_gamepad_input(
         input.move_right = true;
     }
     if is_binding_active(&gamepad_bindings.kick) {
-        input.kick = true;
+        input.straight_kick = true;
     }
     if is_binding_active(&gamepad_bindings.sprint) {
         input.sprint = true;
@@ -426,15 +440,26 @@ fn read_raw_gamepad_input(
     if is_binding_active(&gamepad_bindings.mode) {
         input.mode = !is_cube_mode;
     }
-    if is_binding_active(&gamepad_bindings.curve_left) {
-        input.curve_left = true;
-    }
-    if is_binding_active(&gamepad_bindings.curve_right) {
-        input.curve_right = true;
-    }
     if is_binding_active(&gamepad_bindings.wildcard) {
         input.stop_interact = !is_cube_mode;
         input.dash = is_cube_mode;
+    }
+
+    // Joystick analógico derecho para dirección de comba (ejes 3=X, 4=Y en gilrs)
+    let right_x = idx_to_gilrs_axis(3).map(|ax| gamepad.value(ax)).unwrap_or(0.0);
+    let right_y = idx_to_gilrs_axis(4).map(|ax| gamepad.value(ax)).unwrap_or(0.0);
+    let right_stick = bevy::math::Vec2::new(right_x, right_y);
+    const CURVE_DEADZONE: f32 = 0.3;
+    if right_stick.length() > CURVE_DEADZONE {
+        input.nseo_vec = right_stick.normalize();
+    } else {
+        // Fallback: bindings digitales si no hay analog stick
+        let mut curve = bevy::math::Vec2::ZERO;
+        if is_binding_active(&gamepad_bindings.curve_north) { curve.y += 1.0; }
+        if is_binding_active(&gamepad_bindings.curve_south) { curve.y -= 1.0; }
+        if is_binding_active(&gamepad_bindings.curve_east)  { curve.x += 1.0; }
+        if is_binding_active(&gamepad_bindings.curve_west)  { curve.x -= 1.0; }
+        input.nseo_vec = curve.normalize_or_zero();
     }
 
     input

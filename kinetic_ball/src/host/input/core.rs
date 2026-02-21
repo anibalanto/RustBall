@@ -9,8 +9,6 @@ pub enum GameAction {
     MoveLeft,
     MoveRight,
     Kick,
-    CurveLeft,
-    CurveRight,
     StopInteract,
     Dash,
     Sprint, // Correr
@@ -27,6 +25,12 @@ pub trait InputSource: Send + Sync {
 
     /// Retorna true si la acción fue soltada en este frame (just_released)
     fn just_released(&self, action: GameAction) -> bool;
+
+    /// Retorna la dirección de comba en espacio absoluto.
+    /// Fallback = sin comba. NetworkInputSource sobreescribe con el valor real del PlayerInput.
+    fn get_curve_dir(&self) -> bevy::math::Vec2 {
+        bevy::math::Vec2::ZERO
+    }
 
     /// Actualiza el estado interno (llamar una vez por frame)
     #[allow(dead_code)]

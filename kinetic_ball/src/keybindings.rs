@@ -189,8 +189,10 @@ pub struct KeyBindingsConfig {
     pub move_left: SerializableKeyCode,
     pub move_right: SerializableKeyCode,
     pub kick: SerializableKeyCode,
-    pub curve_left: SerializableKeyCode,
-    pub curve_right: SerializableKeyCode,
+    pub curve_north: SerializableKeyCode, // W - comba norte (arriba absoluto)
+    pub curve_south: SerializableKeyCode, // S - comba sur (abajo absoluto)
+    pub curve_east: SerializableKeyCode,  // D - comba este (derecha absoluta)
+    pub curve_west: SerializableKeyCode,  // A - comba oeste (izquierda absoluta)
     pub wildcard: SerializableKeyCode, // StopInteract en modo normal, Dash en modo cubo
     pub sprint: SerializableKeyCode,
     pub mode: SerializableKeyCode,
@@ -203,9 +205,11 @@ impl Default for KeyBindingsConfig {
             move_down: SerializableKeyCode(KeyCode::ArrowDown),
             move_left: SerializableKeyCode(KeyCode::ArrowLeft),
             move_right: SerializableKeyCode(KeyCode::ArrowRight),
-            kick: SerializableKeyCode(KeyCode::KeyS),
-            curve_left: SerializableKeyCode(KeyCode::KeyD),
-            curve_right: SerializableKeyCode(KeyCode::KeyA),
+            kick: SerializableKeyCode(KeyCode::KeyX),
+            curve_north: SerializableKeyCode(KeyCode::KeyW),
+            curve_south: SerializableKeyCode(KeyCode::KeyS),
+            curve_east: SerializableKeyCode(KeyCode::KeyD),
+            curve_west: SerializableKeyCode(KeyCode::KeyA),
             wildcard: SerializableKeyCode(KeyCode::ShiftLeft),
             sprint: SerializableKeyCode(KeyCode::Space),
             mode: SerializableKeyCode(KeyCode::ControlRight),
@@ -224,8 +228,10 @@ pub enum GameAction {
     MoveLeft,
     MoveRight,
     Kick,
-    CurveLeft,
-    CurveRight,
+    CurveNorth, // W
+    CurveSouth, // S
+    CurveEast,  // D
+    CurveWest,  // A
     Wildcard, // StopInteract en modo normal, Dash en modo cubo
     Sprint,
     Mode,
@@ -239,8 +245,10 @@ impl GameAction {
             GameAction::MoveLeft,
             GameAction::MoveRight,
             GameAction::Kick,
-            GameAction::CurveLeft,
-            GameAction::CurveRight,
+            GameAction::CurveNorth,
+            GameAction::CurveSouth,
+            GameAction::CurveEast,
+            GameAction::CurveWest,
             GameAction::Wildcard,
             GameAction::Sprint,
             GameAction::Mode,
@@ -253,9 +261,11 @@ impl GameAction {
             GameAction::MoveDown => "Mover Abajo",
             GameAction::MoveLeft => "Mover Izquierda",
             GameAction::MoveRight => "Mover Derecha",
-            GameAction::Kick => "Patear",
-            GameAction::CurveLeft => "Curva Izquierda",
-            GameAction::CurveRight => "Curva Derecha",
+            GameAction::Kick => "Patear (sin comba)",
+            GameAction::CurveNorth => "Comba Norte",
+            GameAction::CurveSouth => "Comba Sur",
+            GameAction::CurveEast => "Comba Este",
+            GameAction::CurveWest => "Comba Oeste",
             GameAction::Wildcard => "Especial",
             GameAction::Sprint => "Sprint",
             GameAction::Mode => "Modo",
@@ -271,8 +281,10 @@ impl KeyBindingsConfig {
             GameAction::MoveLeft => self.move_left.0,
             GameAction::MoveRight => self.move_right.0,
             GameAction::Kick => self.kick.0,
-            GameAction::CurveLeft => self.curve_left.0,
-            GameAction::CurveRight => self.curve_right.0,
+            GameAction::CurveNorth => self.curve_north.0,
+            GameAction::CurveSouth => self.curve_south.0,
+            GameAction::CurveEast => self.curve_east.0,
+            GameAction::CurveWest => self.curve_west.0,
             GameAction::Wildcard => self.wildcard.0,
             GameAction::Sprint => self.sprint.0,
             GameAction::Mode => self.mode.0,
@@ -287,8 +299,10 @@ impl KeyBindingsConfig {
             GameAction::MoveLeft => self.move_left = key,
             GameAction::MoveRight => self.move_right = key,
             GameAction::Kick => self.kick = key,
-            GameAction::CurveLeft => self.curve_left = key,
-            GameAction::CurveRight => self.curve_right = key,
+            GameAction::CurveNorth => self.curve_north = key,
+            GameAction::CurveSouth => self.curve_south = key,
+            GameAction::CurveEast => self.curve_east = key,
+            GameAction::CurveWest => self.curve_west = key,
             GameAction::Wildcard => self.wildcard = key,
             GameAction::Sprint => self.sprint = key,
             GameAction::Mode => self.mode = key,
@@ -453,6 +467,8 @@ impl RawGamepadInput {
 }
 
 /// Configuración de bindings para un gamepad genérico
+/// Para gamepads sin analog stick derecho, permite bindear los 4 ejes de comba a botones/ejes.
+/// En gamepads con analog stick derecho, ese stick se usa automáticamente (ver read_bevy_gamepad_input).
 #[derive(Debug, Clone, Serialize, Deserialize, Resource)]
 pub struct GamepadBindingsConfig {
     pub move_up: Option<RawGamepadInput>,
@@ -460,8 +476,10 @@ pub struct GamepadBindingsConfig {
     pub move_left: Option<RawGamepadInput>,
     pub move_right: Option<RawGamepadInput>,
     pub kick: Option<RawGamepadInput>,
-    pub curve_left: Option<RawGamepadInput>,
-    pub curve_right: Option<RawGamepadInput>,
+    pub curve_north: Option<RawGamepadInput>, // fallback digital para comba norte
+    pub curve_south: Option<RawGamepadInput>, // fallback digital para comba sur
+    pub curve_east: Option<RawGamepadInput>,  // fallback digital para comba este
+    pub curve_west: Option<RawGamepadInput>,  // fallback digital para comba oeste
     pub wildcard: Option<RawGamepadInput>,
     pub sprint: Option<RawGamepadInput>,
     pub mode: Option<RawGamepadInput>,
@@ -470,15 +488,16 @@ pub struct GamepadBindingsConfig {
 impl Default for GamepadBindingsConfig {
     fn default() -> Self {
         Self {
-            // Por defecto, usar ejes 0 y 1 para movimiento
             move_up: Some(RawGamepadInput::AxisNegative(1)),
             move_down: Some(RawGamepadInput::AxisPositive(1)),
             move_left: Some(RawGamepadInput::AxisNegative(0)),
             move_right: Some(RawGamepadInput::AxisPositive(0)),
-            // Botones típicos
             kick: Some(RawGamepadInput::Button(0)),
-            curve_left: Some(RawGamepadInput::Button(2)),
-            curve_right: Some(RawGamepadInput::Button(1)),
+            // Analog stick derecho (ejes 3 y 4) como fallback digital
+            curve_north: Some(RawGamepadInput::AxisNegative(4)),
+            curve_south: Some(RawGamepadInput::AxisPositive(4)),
+            curve_east: Some(RawGamepadInput::AxisPositive(3)),
+            curve_west: Some(RawGamepadInput::AxisNegative(3)),
             wildcard: Some(RawGamepadInput::Button(4)),
             sprint: Some(RawGamepadInput::Button(5)),
             mode: Some(RawGamepadInput::Button(3)),
@@ -494,8 +513,10 @@ impl GamepadBindingsConfig {
             GameAction::MoveLeft => self.move_left,
             GameAction::MoveRight => self.move_right,
             GameAction::Kick => self.kick,
-            GameAction::CurveLeft => self.curve_left,
-            GameAction::CurveRight => self.curve_right,
+            GameAction::CurveNorth => self.curve_north,
+            GameAction::CurveSouth => self.curve_south,
+            GameAction::CurveEast => self.curve_east,
+            GameAction::CurveWest => self.curve_west,
             GameAction::Wildcard => self.wildcard,
             GameAction::Sprint => self.sprint,
             GameAction::Mode => self.mode,
@@ -509,8 +530,10 @@ impl GamepadBindingsConfig {
             GameAction::MoveLeft => self.move_left = input,
             GameAction::MoveRight => self.move_right = input,
             GameAction::Kick => self.kick = input,
-            GameAction::CurveLeft => self.curve_left = input,
-            GameAction::CurveRight => self.curve_right = input,
+            GameAction::CurveNorth => self.curve_north = input,
+            GameAction::CurveSouth => self.curve_south = input,
+            GameAction::CurveEast => self.curve_east = input,
+            GameAction::CurveWest => self.curve_west = input,
             GameAction::Wildcard => self.wildcard = input,
             GameAction::Sprint => self.sprint = input,
             GameAction::Mode => self.mode = input,
