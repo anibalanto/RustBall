@@ -4,7 +4,7 @@ mod player_visuals;
 
 pub use field::{
     adjust_field_for_map, spawn_map_lines, spawn_line_segment, spawn_circle, spawn_circle_outline,
-    approximate_curve_for_rendering, MAP_LINES_Z, LINE_THICKNESS,
+    approximate_curve_for_rendering, update_set_piece_visual, MAP_LINES_Z, LINE_THICKNESS,
 };
 pub use minimap::{
     spawn_minimap_dots, spawn_minimap_lines, spawn_minimap_line_segment,

@@ -131,6 +131,15 @@ pub struct SlideCubeVisual {
 }
 
 // ============================================================================
+// SET PIECE COMPONENTS
+// ============================================================================
+
+/// Marca las entidades del círculo de zona de exclusión de jugadas a balón parado.
+/// Se despawnean y re-crean cada vez que cambia el estado del partido.
+#[derive(Component)]
+pub struct SetPieceCircle;
+
+// ============================================================================
 // MINIMAP COMPONENTS
 // ============================================================================
 

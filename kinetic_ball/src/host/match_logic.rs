@@ -15,10 +15,10 @@
 //   5. broadcast_match_state  → envía MatchUpdate periódicamente
 // ============================================================================
 
-use crate::host::host::{Ball, HostMatchGame, LoadedMap, NetworkSender, OutgoingMessage, Player, Sphere};
+use crate::host::host::{Ball, HostMatchGame, LoadedMap, NetworkSender, OutgoingMessage, Player, SetPieceLock, Sphere};
+use bevy_rapier2d::dynamics::Dominance;
 use crate::shared::match_game::{ball_in_goal, ball_out_of_bounds, MatchGame, MatchOps, SetPiece};
-use crate::shared::protocol::ControlMessage;
-use crate::shared::GameConfig;
+use crate::shared::protocol::{ControlMessage, GameConfig};
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 
@@ -145,13 +145,14 @@ pub fn update_ball_touch(
     };
     let ball_pos = ball_transform.translation.truncate();
 
-    // Si hay una jugada a balón parado pendiente, esperamos que la pelota se mueva
-    // para darla por reanudada (umbral: velocidad > 30 unidades/s)
+    // Si hay una jugada a balón parado pendiente:
+    // - Durante la fase de movimiento libre (timer activo): no tocar nada.
+    // - Una vez colocada/congelada (timer = None): limpiar cuando la pelota se mueva.
     if match_game.0.pending_set_piece.is_some() {
-        if ball_vel.linvel.length() > 30.0 {
+        if match_game.0.set_piece_delay_timer.is_none() && ball_vel.linvel.length() > 30.0 {
             match_game.0.pending_set_piece = None;
         }
-        return; // Mientras esté congelada, no actualizar último toque
+        return;
     }
 
     // Detectar qué jugador está en contacto con la pelota
@@ -208,10 +209,9 @@ pub fn detect_goal(
     mut match_game: ResMut<HostMatchGame>,
     network_tx: Res<NetworkSender>,
 ) {
-    // Solo detectar goles cuando el partido está en curso y no hay un kickoff pendiente.
-    // Si pending_kickoff es true, la pelota acaba de ser (o será) recentrada en este frame;
-    // no queremos detectar el gol anterior de nuevo.
-    if !match_game.0.is_running() || match_game.0.pending_kickoff {
+    // Solo detectar goles cuando el partido está en curso, no hay kickoff pendiente
+    // y no hay un set piece en curso (pelota fuera de juego).
+    if !match_game.0.is_running() || match_game.0.pending_kickoff || match_game.0.pending_set_piece.is_some() {
         return;
     }
 
@@ -255,7 +255,7 @@ pub fn detect_goal(
 ///   - Salida por la banda   → lateral (equipo contrario al último toque)
 ///   - Salida por el fondo   → corner (defensor tocó último) o saque de puerta (atacante tocó)
 pub fn detect_ball_out(
-    mut ball_query: Query<(&mut Transform, &mut Velocity), With<Ball>>,
+    ball_query: Query<&Transform, With<Ball>>,
     loaded_map: Res<LoadedMap>,
     config: Res<GameConfig>,
     mut match_game: ResMut<HostMatchGame>,
@@ -266,7 +266,7 @@ pub fn detect_ball_out(
         return;
     }
 
-    let Ok((mut ball_transform, mut ball_velocity)) = ball_query.single_mut() else {
+    let Ok(ball_transform) = ball_query.single() else {
         return;
     };
     let ball_pos = Vec2::new(ball_transform.translation.x, ball_transform.translation.y);
@@ -292,7 +292,7 @@ pub fn detect_ball_out(
     let last_touch = match_game.0.last_team_touch;
     let is_sideline = ball_pos.y.abs() > half_h;
 
-    let (set_piece, restart_pos) = if is_sideline {
+    let set_piece = if is_sideline {
         // ── Lateral ──────────────────────────────────────────────────────────
         let sacking_team = last_touch.map(|t| 1 - t).unwrap_or(0);
         let pos = Vec2::new(
@@ -303,7 +303,7 @@ pub fn detect_ball_out(
             "🚩 Lateral — equipo {} saca en ({:.0}, {:.0})",
             sacking_team, pos.x, pos.y
         );
-        (SetPiece::Lateral { team: sacking_team, position: pos }, pos)
+        SetPiece::Lateral { team: sacking_team, position: pos }
     } else {
         // ── Fondo (corner o saque de puerta) ─────────────────────────────────
         let x_sign = ball_pos.x.signum();
@@ -321,7 +321,7 @@ pub fn detect_ball_out(
                 "🚩 Corner — equipo {} saca en ({:.0}, {:.0})",
                 attacker, pos.x, pos.y
             );
-            (SetPiece::Corner { team: attacker, position: pos }, pos)
+            SetPiece::Corner { team: attacker, position: pos }
         } else {
             // El atacante tocó la pelota → saque de puerta para el defensor
             let pos = Vec2::new(x_sign * (half_w - margin * 4.0), 0.0);
@@ -329,19 +329,16 @@ pub fn detect_ball_out(
                 "🚩 Saque de puerta — equipo {} saca en ({:.0}, {:.0})",
                 defending_team, pos.x, pos.y
             );
-            (SetPiece::GoalKick { team: defending_team, position: pos }, pos)
+            SetPiece::GoalKick { team: defending_team, position: pos }
         }
     };
 
-    // Teleportar la pelota al punto de reanudación y congelarla
-    ball_transform.translation.x = restart_pos.x;
-    ball_transform.translation.y = restart_pos.y;
-    ball_velocity.linvel = Vec2::ZERO;
-    ball_velocity.angvel = 0.0;
-
-    // Limpiar último toque para evitar re-detección inmediata
+    // Registrar el set piece y arrancar el timer de movimiento libre.
+    // La pelota se deja rodar naturalmente durante `set_piece_delay_secs`;
+    // el sistema `apply_set_piece_position` la teleportará y congelará al expirar.
     match_game.0.last_team_touch = None;
     match_game.0.pending_set_piece = Some(set_piece);
+    match_game.0.set_piece_delay_timer = Some(config.set_piece_delay_secs);
     broadcast_match_update(&match_game.0, &network_tx);
 }
 
@@ -372,6 +369,133 @@ pub fn reset_ball_for_kickoff(
 
     println!("🔄 Saque de centro — pelota recentrada");
     broadcast_match_update(&match_game.0, &network_tx);
+}
+
+// ============================================================================
+// SISTEMA: TELEPORT DE PELOTA AL PUNTO DE REANUDACIÓN (TRAS DELAY)
+// ============================================================================
+
+/// Cuenta regresiva del timer de set piece. Cuando expira, teleporta la pelota
+/// al punto de reanudación y la congela, activando la zona de exclusión.
+pub fn apply_set_piece_position(
+    time: Res<Time>,
+    mut match_game: ResMut<HostMatchGame>,
+    mut ball_query: Query<(&mut Transform, &mut Velocity), With<Ball>>,
+    network_tx: Res<NetworkSender>,
+) {
+    let Some(timer) = match_game.0.set_piece_delay_timer else {
+        return;
+    };
+
+    let new_timer = timer - time.delta_secs();
+    if new_timer > 0.0 {
+        match_game.0.set_piece_delay_timer = Some(new_timer);
+        return;
+    }
+
+    // Timer expirado: teleportar y congelar la pelota
+    match_game.0.set_piece_delay_timer = None;
+
+    let restart_pos = match &match_game.0.pending_set_piece {
+        Some(sp) => sp.position().unwrap_or(Vec2::ZERO),
+        None => return,
+    };
+
+    let Ok((mut transform, mut velocity)) = ball_query.single_mut() else {
+        return;
+    };
+    transform.translation.x = restart_pos.x;
+    transform.translation.y = restart_pos.y;
+    velocity.linvel = Vec2::ZERO;
+    velocity.angvel = 0.0;
+
+    println!("📍 Set piece colocada en ({:.0}, {:.0})", restart_pos.x, restart_pos.y);
+    broadcast_match_update(&match_game.0, &network_tx);
+}
+
+// ============================================================================
+// SISTEMA: ZONA DE EXCLUSIÓN DURANTE JUGADA A BALÓN PARADO
+// ============================================================================
+
+/// Empuja a los jugadores del equipo contrario fuera del radio de exclusión
+/// mientras la pelota está colocada en el punto de reanudación.
+pub fn enforce_set_piece_exclusion(
+    match_game: Res<HostMatchGame>,
+    config: Res<GameConfig>,
+    player_query: Query<&Player>,
+    mut sphere_query: Query<(&Transform, &mut Velocity), (With<Sphere>, Without<Ball>)>,
+) {
+    // Solo aplica cuando la pelota ya está colocada (timer expirado)
+    if match_game.0.set_piece_delay_timer.is_some() {
+        return;
+    }
+
+    let Some(ref set_piece) = match_game.0.pending_set_piece else {
+        return;
+    };
+
+    let Some(set_piece_pos) = set_piece.position() else {
+        return; // KickOff no tiene zona de exclusión
+    };
+    let kicking_team = set_piece.team();
+    let exclusion_radius = config.set_piece_exclusion_radius + config.sphere_radius;
+
+    for player in player_query.iter() {
+        if player.team_index == kicking_team {
+            continue; // El equipo que saca puede acercarse libremente
+        }
+
+        let Ok((sphere_transform, mut velocity)) = sphere_query.get_mut(player.sphere) else {
+            continue;
+        };
+
+        let player_pos = sphere_transform.translation.truncate();
+        let diff = player_pos - set_piece_pos;
+        let dist = diff.length();
+
+        if dist < exclusion_radius {
+            let push_dir = if dist > 1.0 { diff.normalize() } else { Vec2::Y };
+            let penetration = exclusion_radius - dist;
+            // Impulso proporcional a la penetración, evitando acumulación indefinida
+            let push = push_dir * penetration * 25.0;
+            velocity.linvel += push;
+            // Limitar a velocidad caminando * 2 para no lanzar al jugador
+            let max_speed = config.player_speed_walking * 2.0;
+            if velocity.linvel.length() > max_speed {
+                velocity.linvel = velocity.linvel.normalize() * max_speed;
+            }
+        }
+    }
+}
+
+// ============================================================================
+// SISTEMA: LOCK DE PELOTA DURANTE JUGADA A BALÓN PARADO
+// ============================================================================
+
+/// Actualiza `SetPieceLock` y la `Dominance` de la pelota.
+///
+/// Cuando la pelota está colocada en el punto de reanudación:
+///   - `SetPieceLock(true)` → engine.rs omite los impulsos suaves (push, attract, dash).
+///   - `Dominance::group(127)` → Rapier trata la pelota como masa infinita en contactos.
+///     Los jugadores rebotan contra ella sin moverla. Los kicks (ExternalImpulse)
+///     siguen funcionando porque bypasean el solver de contacto.
+pub fn update_set_piece_lock(
+    match_game: Res<HostMatchGame>,
+    mut lock: ResMut<SetPieceLock>,
+    mut ball_query: Query<&mut Dominance, With<Ball>>,
+) {
+    let locked = match_game.0.pending_set_piece.is_some()
+        && match_game.0.set_piece_delay_timer.is_none();
+
+    if lock.0 == locked {
+        return; // Sin cambio, no tocar Dominance
+    }
+    lock.0 = locked;
+
+    let Ok(mut dominance) = ball_query.single_mut() else {
+        return;
+    };
+    dominance.groups = if locked { 127 } else { 0 };
 }
 
 // ============================================================================

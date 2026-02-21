@@ -49,7 +49,7 @@ use networking::{check_connection, process_network_messages, start_connection};
 use rendering::{
     adjust_field_for_map, cleanup_minimap_dots, keep_name_horizontal, spawn_minimap_dots,
     sync_minimap_dots, sync_minimap_names, update_charge_bar, update_dash_cooldown,
-    update_mode_visuals, update_player_sprite,
+    update_mode_visuals, update_player_sprite, update_set_piece_visual,
 };
 use resources::{
     AdminPanelState, ClientMatchGame, ConnectionConfig, CreateRoomConfig, DynamicSplitState,
@@ -255,6 +255,7 @@ fn main() {
             Update,
             (
                 adjust_field_for_map,
+                update_set_piece_visual,
                 interpolate_entities,
                 keep_name_horizontal,
                 update_split_screen_state,

@@ -5,11 +5,13 @@ use bevy::sprite_render::ColorMaterial;
 
 use crate::components::{
     DefaultFieldLine, FieldBackground, InGameEntity, MapLineEntity, MinimapCamera,
-    MinimapFieldBackground, MinimapFieldLine,
+    MinimapFieldBackground, MinimapFieldLine, SetPieceCircle,
 };
 use crate::rendering::minimap::spawn_minimap_lines;
-use crate::resources::LoadedMap;
+use crate::resources::{ClientMatchGame, LoadedMap};
 use crate::shared::map::Map;
+use crate::shared::match_game::SetPiece;
+use crate::shared::protocol::GameConfig;
 
 // Constante Z para las líneas del mapa (entre el piso Z=0 y los jugadores Z=10+)
 pub const MAP_LINES_Z: f32 = 5.0;
@@ -327,4 +329,65 @@ pub fn approximate_curve_for_rendering(
     }
 
     points
+}
+
+// ============================================================================
+// SISTEMA: CÍRCULO DE ZONA DE EXCLUSIÓN PARA JUGADAS A BALÓN PARADO
+// ============================================================================
+
+/// Dibuja (o elimina) el círculo de zona de exclusión cuando cambia el estado
+/// del partido. La circunferencia tiene el color del equipo que tiene el saque;
+/// el radio coincide con el que el host usa para empujar al equipo contrario.
+pub fn update_set_piece_visual(
+    mut commands: Commands,
+    match_game: Res<ClientMatchGame>,
+    config: Res<GameConfig>,
+    circles: Query<Entity, With<SetPieceCircle>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    if !match_game.is_changed() {
+        return;
+    }
+
+    // Limpiar círculos anteriores
+    for entity in circles.iter() {
+        commands.entity(entity).despawn();
+    }
+
+    // Obtener set piece activo (solo existe cuando la pelota ya está colocada)
+    let Some(ref state) = match_game.0 else { return };
+    let Some(ref set_piece) = state.pending_set_piece else { return };
+    let Some(position) = set_piece.position() else { return };
+    let team = set_piece.team();
+
+    let (r, g, b) = config
+        .team_colors
+        .get(team as usize)
+        .copied()
+        .unwrap_or((0.5, 0.5, 0.5));
+
+    let exclusion_radius = config.set_piece_exclusion_radius;
+    let ring_thickness = 8.0_f32;
+    let inner_radius = exclusion_radius - ring_thickness;
+
+    // Relleno semitransparente
+    commands.spawn((
+        InGameEntity,
+        SetPieceCircle,
+        Mesh2d(meshes.add(Circle::new(inner_radius))),
+        MeshMaterial2d(materials.add(Color::srgba(r, g, b, 0.12))),
+        Transform::from_xyz(position.x, position.y, MAP_LINES_Z + 2.0),
+        RenderLayers::layer(0),
+    ));
+
+    // Borde sólido (anillo)
+    commands.spawn((
+        InGameEntity,
+        SetPieceCircle,
+        Mesh2d(meshes.add(Annulus::new(inner_radius, exclusion_radius))),
+        MeshMaterial2d(materials.add(Color::srgba(r, g, b, 0.9))),
+        Transform::from_xyz(position.x, position.y, MAP_LINES_Z + 2.1),
+        RenderLayers::layer(0),
+    ));
 }

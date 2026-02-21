@@ -9,7 +9,7 @@ use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 use matchbox_socket::PeerId;
 
-use super::host::{Ball, GameInputManager, GameTick, Player, SlideCube, Sphere};
+use super::host::{Ball, GameInputManager, GameTick, Player, SetPieceLock, SlideCube, Sphere};
 use super::input::GameAction;
 use crate::host::map::converter::MapConverter;
 use crate::host::map::loader;
@@ -353,6 +353,7 @@ pub fn apply_magnus_effect(
 
 // SISTEMA DE ATRACCIÓN MEJORADO - Usa fuerza gradual en vez de reemplazar velocidad
 pub fn attract_ball(
+    lock: Res<SetPieceLock>,
     game_input: Res<GameInputManager>,
     config: Res<GameConfig>,
     player_query: Query<&Player>,
@@ -362,6 +363,7 @@ pub fn attract_ball(
         (With<Ball>, Without<Sphere>),
     >,
 ) {
+    if lock.0 { return; }
     for player in player_query.iter() {
         // No funciona en modo cubo
         if player.mode_cube_active {
@@ -432,12 +434,14 @@ pub fn attract_ball(
 
 // Sistema de empuje al caminar: aplica impulso a la pelota cuando el jugador la toca mientras camina
 pub fn push_ball_on_contact(
+    lock: Res<SetPieceLock>,
     game_input: Res<GameInputManager>,
     config: Res<GameConfig>,
     player_query: Query<&Player>,
     sphere_query: Query<(&Transform, &Velocity), (With<Sphere>, Without<Ball>)>,
     mut ball_query: Query<(&Transform, &mut ExternalImpulse), (With<Ball>, Without<Sphere>)>,
 ) {
+    if lock.0 { return; }
     // Radio de contacto: cuando los colliders se tocan
     let contact_radius = config.sphere_radius + config.ball_radius + 5.0;
     let push_force = 8000.0; // Fuerza de empuje base
@@ -557,12 +561,14 @@ pub fn update_kick_memory_timer(time: Res<Time>, mut player_query: Query<&mut Pl
 }
 
 pub fn auto_touch_ball_while_running(
+    lock: Res<SetPieceLock>,
     game_input: Res<GameInputManager>,
     config: Res<GameConfig>,
     player_query: Query<&Player>,
     sphere_query: Query<(&Transform, &Velocity), (With<Sphere>, Without<Ball>)>,
     mut ball_query: Query<(&Transform, &mut Velocity), With<Ball>>,
 ) {
+    if lock.0 { return; }
     let activation_radius = config.sphere_radius + config.ball_radius + 5.0;
     let default_kick_force = 700.0;
 
@@ -893,12 +899,14 @@ pub fn execute_slide(
 }
 
 pub fn dash_first_touch_ball(
+    lock: Res<SetPieceLock>,
     game_input: Res<GameInputManager>,
     config: Res<GameConfig>,
     mut player_query: Query<&mut Player>,
     sphere_query: Query<(&Transform, &Velocity), (With<Sphere>, Without<Ball>)>,
     mut ball_query: Query<(&Transform, &mut Velocity), With<Ball>>,
 ) {
+    if lock.0 { return; }
     let player_diameter = config.sphere_radius * 2.0;
     let target_distance = player_diameter * 1.5;
     let activation_radius = config.sphere_radius + config.ball_radius + 50.0;

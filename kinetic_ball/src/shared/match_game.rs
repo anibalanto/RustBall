@@ -53,6 +53,28 @@ pub enum SetPiece {
     KickOff,
 }
 
+impl SetPiece {
+    /// Posición del punto de reanudación. `None` para KickOff (siempre en centro).
+    pub fn position(&self) -> Option<Vec2> {
+        match self {
+            SetPiece::Lateral { position, .. } => Some(*position),
+            SetPiece::Corner { position, .. } => Some(*position),
+            SetPiece::GoalKick { position, .. } => Some(*position),
+            SetPiece::KickOff => None,
+        }
+    }
+
+    /// Equipo que tiene el saque.
+    pub fn team(&self) -> u8 {
+        match self {
+            SetPiece::Lateral { team, .. } => *team,
+            SetPiece::Corner { team, .. } => *team,
+            SetPiece::GoalKick { team, .. } => *team,
+            SetPiece::KickOff => 0,
+        }
+    }
+}
+
 // ============================================================================
 // STRUCT PRINCIPAL
 // ============================================================================
@@ -74,6 +96,9 @@ pub struct MatchGame {
     pub pending_kickoff: bool,
     /// Set piece pendiente
     pub pending_set_piece: Option<SetPiece>,
+    /// Cuenta regresiva antes de teleportar la pelota al punto de reanudación.
+    /// `Some(t)` → pelota en movimiento libre, `None` → pelota ya colocada/congelada.
+    pub set_piece_delay_timer: Option<f32>,
 }
 
 /// Snapshot serializable del partido para enviar por red
@@ -83,6 +108,9 @@ pub struct MatchGameState {
     pub time_remaining: f32,
     pub status: MatchStatus,
     pub winner: Option<MatchWinner>,
+    /// Jugada a balón parado activa (solo presente cuando la pelota ya está
+    /// colocada en el punto de reanudación, no durante el movimiento libre).
+    pub pending_set_piece: Option<SetPiece>,
 }
 
 impl From<&MatchGame> for MatchGameState {
@@ -92,6 +120,12 @@ impl From<&MatchGame> for MatchGameState {
             time_remaining: g.time_remaining,
             status: g.status.clone(),
             winner: g.winner(),
+            // Solo incluir el set piece cuando la pelota ya está colocada (timer expirado)
+            pending_set_piece: if g.set_piece_delay_timer.is_none() {
+                g.pending_set_piece.clone()
+            } else {
+                None
+            },
         }
     }
 }
@@ -154,6 +188,7 @@ impl MatchOps for MatchGame {
             last_team_touch: None,
             pending_kickoff: true,
             pending_set_piece: None,
+            set_piece_delay_timer: None,
         }
     }
 

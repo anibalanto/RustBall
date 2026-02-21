@@ -352,6 +352,14 @@ pub struct GameConfig {
     // Map loading
     #[serde(default)]
     pub map_path: Option<String>,
+
+    // Set piece (jugadas a balón parado)
+    /// Radio de exclusión en unidades de juego: el equipo contrario debe
+    /// mantenerse fuera de este radio durante un saque (lateral, corner, puerta).
+    pub set_piece_exclusion_radius: f32,
+    /// Segundos de movimiento natural de la pelota antes de teleportarla
+    /// al punto de reanudación cuando sale del campo.
+    pub set_piece_delay_secs: f32,
 }
 
 impl Default for GameConfig {
@@ -417,6 +425,10 @@ impl Default for GameConfig {
 
             // Map loading
             map_path: None,
+
+            // Set piece
+            set_piece_exclusion_radius: 200.0,
+            set_piece_delay_secs: 1.0,
         }
     }
 }

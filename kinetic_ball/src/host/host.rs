@@ -18,6 +18,12 @@ pub struct HostMatchSlots(pub MatchSlots);
 #[derive(Resource, Default)]
 pub struct HostMatchGame(pub crate::shared::match_game::MatchGame);
 
+/// Señal compartida: `true` mientras la pelota está bloqueada en el punto de
+/// reanudación de una jugada a balón parado. Los sistemas de engine.rs la leen
+/// para no empujar la pelota con contacto suave.
+#[derive(Resource, Default)]
+pub struct SetPieceLock(pub bool);
+
 pub fn host(
     map: Option<String>,
     default_map_content: &'static str,
@@ -143,6 +149,7 @@ pub fn host(
         ))) // 60 Hz
         .insert_resource(HostMatchSlots(initial_slots))
         .insert_resource(HostMatchGame::default())
+        .insert_resource(SetPieceLock::default())
         .init_resource::<GameInputManager>()
         .add_systems(Startup, (configure_rapier, setup_game, setup_map).chain())
         .add_systems(
@@ -173,11 +180,14 @@ pub fn host(
                     .chain(),
                 // Grupo 2: lógica de partido (se ejecuta después del grupo 1)
                 (
-                    update_ball_touch,      // ← registra último toque y limpia pending_set_piece
+                    update_ball_touch,          // registra último toque y limpia pending_set_piece
                     tick_match_time,
-                    reset_ball_for_kickoff, // ← antes de detect_goal: limpia pending_kickoff
+                    reset_ball_for_kickoff,     // antes de detect_goal: limpia pending_kickoff
                     detect_goal,
-                    detect_ball_out,
+                    detect_ball_out,            // detecta salida y arranca timer
+                    apply_set_piece_position,   // teleporta pelota al expirar el timer
+                    enforce_set_piece_exclusion, // empuja al equipo contrario fuera del radio
+                    update_set_piece_lock,      // actualiza SetPieceLock y Dominance de la pelota
                     broadcast_match_state,
                 )
                     .chain(),
@@ -413,35 +423,29 @@ fn configure_rapier(mut rapier_config: Query<&mut RapierConfiguration>) {
 fn setup_game(mut commands: Commands, config: Res<GameConfig>) {
     println!("⚽ Configurando juego...");
 
-    // Crear pelota
+    // Crear pelota (dividido en dos tuplas para no superar el límite de 15 de Bevy)
     commands.spawn((
-        Ball {
-            angular_velocity: 0.0,
-        },
-        Transform::from_xyz(0.0, 0.0, 0.0),
-        GlobalTransform::default(),
-        RigidBody::Dynamic,
-        Collider::ball(config.ball_radius),
-        Velocity::zero(),
-        // Pelota: colisiona con todo EXCEPTO líneas solo-jugadores (GROUP_6)
-        CollisionGroups::new(Group::GROUP_3, Group::ALL ^ Group::GROUP_6),
-        SolverGroups::new(Group::GROUP_3, Group::ALL ^ Group::GROUP_6),
-        AdditionalMassProperties::Mass(config.ball_mass),
-        Friction {
-            coefficient: config.ball_friction,
-            combine_rule: CoefficientCombineRule::Average,
-        },
-        Restitution {
-            coefficient: config.ball_restitution,
-            combine_rule: CoefficientCombineRule::Min,
-        },
-        Damping {
-            linear_damping: config.ball_linear_damping,
-            angular_damping: config.ball_angular_damping,
-        },
-        ExternalImpulse::default(),
-        ExternalForce::default(),
-        Ccd::enabled(),
+        (
+            Ball { angular_velocity: 0.0 },
+            Transform::from_xyz(0.0, 0.0, 0.0),
+            GlobalTransform::default(),
+            RigidBody::Dynamic,
+            Collider::ball(config.ball_radius),
+            Velocity::zero(),
+            // Colisiona con todo EXCEPTO líneas solo-jugadores (GROUP_6)
+            CollisionGroups::new(Group::GROUP_3, Group::ALL ^ Group::GROUP_6),
+            SolverGroups::new(Group::GROUP_3, Group::ALL ^ Group::GROUP_6),
+        ),
+        (
+            AdditionalMassProperties::Mass(config.ball_mass),
+            Friction { coefficient: config.ball_friction, combine_rule: CoefficientCombineRule::Average },
+            Restitution { coefficient: config.ball_restitution, combine_rule: CoefficientCombineRule::Min },
+            Damping { linear_damping: config.ball_linear_damping, angular_damping: config.ball_angular_damping },
+            ExternalImpulse::default(),
+            ExternalForce::default(),
+            Ccd::enabled(),
+            Dominance::group(0), // Se sube a 127 durante jugadas a balón parado
+        ),
     ));
 
     println!("✅ Juego configurado");
