@@ -488,14 +488,14 @@ pub struct GamepadBindingsConfig {
 impl Default for GamepadBindingsConfig {
     fn default() -> Self {
         Self {
-            move_up: Some(RawGamepadInput::AxisNegative(1)),
-            move_down: Some(RawGamepadInput::AxisPositive(1)),
+            move_up: Some(RawGamepadInput::AxisPositive(1)),
+            move_down: Some(RawGamepadInput::AxisNegative(1)),
             move_left: Some(RawGamepadInput::AxisNegative(0)),
             move_right: Some(RawGamepadInput::AxisPositive(0)),
             kick: Some(RawGamepadInput::Button(0)),
             // Analog stick derecho (ejes 3 y 4) como fallback digital
-            curve_north: Some(RawGamepadInput::AxisNegative(4)),
-            curve_south: Some(RawGamepadInput::AxisPositive(4)),
+            curve_north: Some(RawGamepadInput::AxisPositive(4)),
+            curve_south: Some(RawGamepadInput::AxisNegative(4)),
             curve_east: Some(RawGamepadInput::AxisPositive(3)),
             curve_west: Some(RawGamepadInput::AxisNegative(3)),
             wildcard: Some(RawGamepadInput::Button(4)),
