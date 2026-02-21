@@ -8,9 +8,11 @@ use std::sync::{Arc, Mutex};
 
 use super::engine::spawn_physics;
 use super::host::{
-    Ball, BroadcastTimer, GameInputManager, GameTick, HostMatchSlots, LoadedMap, NetworkEvent,
-    NetworkReceiver, NetworkSender, NetworkState, OutgoingMessage, Player, Sphere,
+    Ball, BroadcastTimer, GameInputManager, GameTick, HostMatchGame, HostMatchSlots, LoadedMap,
+    NetworkEvent, NetworkReceiver, NetworkSender, NetworkState, OutgoingMessage, Player, Sphere,
 };
+use super::match_logic::broadcast_match_update;
+use crate::shared::match_game::{MatchGame, MatchOps};
 
 // ============================================================================
 // NETWORK SERVER - MATCHBOX WEBRTC
@@ -237,6 +239,14 @@ pub fn handle_control_message_typed(
             });
             None
         }
+        ControlMessage::StartMatch { duration_secs } => {
+            println!("🏆 StartMatch request: {:.0}s", duration_secs);
+            let _ = event_tx.send(NetworkEvent::StartMatch {
+                admin_peer_id: peer_id,
+                duration_secs,
+            });
+            None
+        }
         _ => {
             // Otros mensajes de control del servidor no deberían venir del cliente
             None
@@ -276,6 +286,7 @@ pub fn process_network_messages(
     mut game_input: ResMut<GameInputManager>,
     mut players: Query<(&mut Player, Entity)>,
     mut match_slots: ResMut<HostMatchSlots>,
+    mut match_game: ResMut<HostMatchGame>,
     mut sphere_query: Query<(&mut Transform, &mut Velocity, &mut CollisionGroups), With<Sphere>>,
 ) {
     let mut slots_changed = false;
@@ -571,6 +582,28 @@ pub fn process_network_messages(
                             "⚠️ Player {} tried to toggle admin but is not admin",
                             admin_id
                         );
+                    }
+                }
+            }
+
+            NetworkEvent::StartMatch { admin_peer_id, duration_secs } => {
+                // Verificar que el solicitante sea admin
+                let admin_player_id = players
+                    .iter()
+                    .find(|(p, _)| p.peer_id == admin_peer_id)
+                    .map(|(p, _)| p.id);
+
+                if let Some(admin_id) = admin_player_id {
+                    if match_slots.0.is_admin(admin_id) {
+                        match_game.0 = MatchGame::new(duration_secs);
+                        match_game.0.start();
+                        println!(
+                            "🏆 Partido iniciado por admin {} — {:.0}s",
+                            admin_id, duration_secs
+                        );
+                        broadcast_match_update(&match_game.0, &network_tx);
+                    } else {
+                        println!("⚠️ Jugador {} intentó iniciar partido sin ser admin", admin_id);
                     }
                 }
             }

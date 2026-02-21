@@ -5,7 +5,10 @@ use bevy_egui::{egui, EguiContexts};
 
 use crate::components::RemotePlayer;
 use crate::local_players::LocalPlayers;
-use crate::resources::{AdminPanelState, ClientMatchSlots, ConnectionConfig, NetworkChannels};
+use crate::resources::{
+    AdminPanelState, ClientMatchGame, ClientMatchSlots, ConnectionConfig, NetworkChannels,
+};
+use crate::shared::match_game::{MatchOps, MatchStatus};
 use crate::shared::protocol::ControlMessage;
 use crate::states::AppState;
 
@@ -52,6 +55,7 @@ pub fn admin_panel_ui(
     local_players: Res<LocalPlayers>,
     channels: Res<NetworkChannels>,
     match_slots: Res<ClientMatchSlots>,
+    match_game: Res<ClientMatchGame>,
 ) {
     if !admin_state.is_open {
         return;
@@ -214,6 +218,13 @@ pub fn admin_panel_ui(
 
             ui.separator();
 
+            // ----------------------------------------------------------------
+            // Sección: Estado / Control del partido
+            // ----------------------------------------------------------------
+            render_match_section(ui, &mut admin_state, &match_game, &channels);
+
+            ui.separator();
+
             // Room actions
             ui.horizontal(|ui| {
                 if ui.button("Salir").clicked() {
@@ -367,7 +378,164 @@ fn send_kick_player(channels: &NetworkChannels, player_id: u32) {
 /// Sends a ToggleAdmin control message
 fn send_toggle_admin(channels: &NetworkChannels, player_id: u32, is_admin: bool) {
     if let Some(ref control_tx) = channels.control_sender {
-        let msg = ControlMessage::ToggleAdmin { player_id, is_admin };
+        let msg = ControlMessage::ToggleAdmin {
+            player_id,
+            is_admin,
+        };
         let _ = control_tx.send(msg);
+    }
+}
+
+/// Sends a StartMatch control message
+fn send_start_match(channels: &NetworkChannels, duration_secs: f32) {
+    println!("🏆 StartMatch? request: {:.0}s", duration_secs);
+    if let Some(ref control_tx) = channels.control_sender {
+        println!("🏆 StartMatch?? request: {:.0}s", duration_secs);
+        let msg = ControlMessage::StartMatch { duration_secs };
+        let _ = control_tx.send(msg);
+    }
+}
+
+// ============================================================================
+// SECCIÓN DE PARTIDO
+// ============================================================================
+
+/// Renderiza la sección de configuración e inicio de partido en el panel de admin.
+/// Muestra marcador y tiempo cuando hay un partido en curso.
+fn render_match_section(
+    ui: &mut egui::Ui,
+    admin_state: &mut AdminPanelState,
+    match_game: &ClientMatchGame,
+    channels: &NetworkChannels,
+) {
+    ui.label(egui::RichText::new("⚽ PARTIDO").strong());
+    ui.add_space(4.0);
+
+    match &match_game.0 {
+        // ── Partido en curso o en cuenta regresiva ─────────────────────────
+        Some(state) if !matches!(state.status, MatchStatus::WaitingToStart) => {
+            render_match_status(ui, state);
+        }
+
+        // ── Sin partido (esperando inicio o None) ─────────────────────────
+        _ => {
+            if admin_state.is_admin {
+                render_match_config(ui, admin_state, channels);
+            } else {
+                ui.label(
+                    egui::RichText::new("Sin partido activo")
+                        .color(egui::Color32::DARK_GRAY)
+                        .italics()
+                        .small(),
+                );
+            }
+        }
+    }
+}
+
+/// Muestra el marcador, tiempo restante y estado del partido en curso.
+fn render_match_status(ui: &mut egui::Ui, state: &crate::shared::match_game::MatchGameState) {
+    use crate::shared::match_game::{MatchStatus, MatchWinner};
+
+    // Marcador central
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new(format!("🔴  {}  —  {}  🔵", state.score[0], state.score[1]))
+                .size(20.0)
+                .strong(),
+        );
+    });
+
+    ui.add_space(4.0);
+
+    match &state.status {
+        MatchStatus::Running => {
+            let mins = (state.time_remaining / 60.0) as u32;
+            let secs = state.time_remaining as u32 % 60;
+            let color = if state.time_remaining < 30.0 {
+                egui::Color32::from_rgb(220, 80, 60)
+            } else {
+                egui::Color32::from_rgb(180, 200, 180)
+            };
+            ui.label(
+                egui::RichText::new(format!("⏱  {:02}:{:02}", mins, secs))
+                    .color(color)
+                    .monospace(),
+            );
+        }
+        MatchStatus::GoalScored {
+            scoring_team,
+            countdown,
+        } => {
+            let team_label = if *scoring_team == 0 {
+                "🔴 ROJO"
+            } else {
+                "🔵 AZUL"
+            };
+            ui.label(
+                egui::RichText::new(format!("⚽ ¡GOL de {}!", team_label))
+                    .color(egui::Color32::GOLD)
+                    .strong(),
+            );
+            ui.label(
+                egui::RichText::new(format!("Reanudando en {:.0}s…", countdown))
+                    .color(egui::Color32::LIGHT_GRAY)
+                    .small(),
+            );
+        }
+        MatchStatus::Ended => {
+            ui.label(egui::RichText::new("🏁 Partido terminado").strong());
+            match &state.winner {
+                Some(MatchWinner::Team(0)) => {
+                    ui.label(
+                        egui::RichText::new("🔴 Ganó el equipo ROJO")
+                            .color(egui::Color32::from_rgb(230, 100, 80))
+                            .strong(),
+                    );
+                }
+                Some(MatchWinner::Team(_)) => {
+                    ui.label(
+                        egui::RichText::new("🔵 Ganó el equipo AZUL")
+                            .color(egui::Color32::from_rgb(80, 120, 230))
+                            .strong(),
+                    );
+                }
+                Some(MatchWinner::Draw) | None => {
+                    ui.label(
+                        egui::RichText::new("🤝 Empate")
+                            .color(egui::Color32::GRAY)
+                            .strong(),
+                    );
+                }
+            }
+        }
+        MatchStatus::WaitingToStart => {}
+    }
+}
+
+/// Controles de configuración e inicio de partido para el admin.
+fn render_match_config(
+    ui: &mut egui::Ui,
+    admin_state: &mut AdminPanelState,
+    channels: &NetworkChannels,
+) {
+    ui.horizontal(|ui| {
+        ui.label("Duración:");
+        ui.add(
+            egui::Slider::new(&mut admin_state.match_duration_minutes, 1.0..=30.0)
+                .step_by(1.0)
+                .suffix(" min")
+                .clamp_to_range(true),
+        );
+    });
+
+    ui.add_space(6.0);
+
+    let duration_secs = admin_state.match_duration_minutes * 60.0;
+    let start_btn = egui::Button::new(egui::RichText::new("▶  Iniciar Partido").strong())
+        .fill(egui::Color32::from_rgb(40, 120, 50));
+
+    if ui.add(start_btn).clicked() {
+        send_start_match(channels, duration_secs);
     }
 }

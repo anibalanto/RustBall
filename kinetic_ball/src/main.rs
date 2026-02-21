@@ -52,9 +52,9 @@ use rendering::{
     update_mode_visuals, update_player_sprite,
 };
 use resources::{
-    AdminPanelState, ConnectionConfig, CreateRoomConfig, DynamicSplitState, GameTick, LoadedMap,
-    MyPlayerId, NetworkChannels, PlayerColors, PreviousInput, RoomFetchChannel, RoomList,
-    SelectedRoom, SplitScreenMaterial, SplitScreenTextures,
+    AdminPanelState, ClientMatchGame, ConnectionConfig, CreateRoomConfig, DynamicSplitState,
+    GameTick, LoadedMap, MyPlayerId, NetworkChannels, PlayerColors, PreviousInput, RoomFetchChannel,
+    RoomList, SelectedRoom, SplitScreenMaterial, SplitScreenTextures,
 };
 use shared::protocol::GameConfig;
 use spawning::{handle_spawn_ball, handle_spawn_player};
@@ -159,6 +159,8 @@ fn main() {
         .insert_resource(AdminPanelState::default())
         // Client match slots (synced from server)
         .insert_resource(resources::ClientMatchSlots::default())
+        // Client match game state (synced from server)
+        .insert_resource(ClientMatchGame::default())
         // Eventos de spawning
         .add_event::<SpawnBallEvent>()
         .add_event::<SpawnPlayerEvent>()

@@ -204,9 +204,10 @@ pub async fn start_webrtc_client(
                             slots.teams[0].starters.len(),
                             slots.teams[1].starters.len()
                         );
-                        // Enviar como un mensaje especial que el cliente puede procesar
-                        // Usamos un canal interno para esto
                         let _ = network_tx.send(ServerMessage::SlotsUpdated(slots));
+                    }
+                    ControlMessage::MatchUpdate(state) => {
+                        let _ = network_tx.send(ServerMessage::MatchUpdate(state));
                     }
                     _ => {}
                 }
@@ -288,6 +289,12 @@ pub async fn start_webrtc_client(
                     }
                     ControlMessage::ToggleAdmin { player_id, is_admin } => {
                         println!("📤 [Red] Enviando ToggleAdmin: {} -> {}", player_id, is_admin);
+                        if let Ok(data) = bincode::serialize(&control_msg) {
+                            socket.channel_mut(0).send(data.into(), server_id);
+                        }
+                    }
+                    ControlMessage::StartMatch { duration_secs } => {
+                        println!("📤 [Red] Enviando StartMatch: {:.0}s", duration_secs);
                         if let Ok(data) = bincode::serialize(&control_msg) {
                             socket.channel_mut(0).send(data.into(), server_id);
                         }

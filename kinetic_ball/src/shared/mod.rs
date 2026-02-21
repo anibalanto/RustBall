@@ -1,8 +1,10 @@
 pub mod map;
+pub mod match_game;
 pub mod match_slots;
 pub mod movements;
 pub mod protocol;
 
+pub use match_game::{MatchGame, MatchGameState, MatchOps, MatchStatus, MatchWinner, SetPiece};
 pub use match_slots::MatchSlots;
 pub use protocol::*;
 

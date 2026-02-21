@@ -9,7 +9,7 @@ use crate::components::{
 };
 use crate::events::{SpawnBallEvent, SpawnPlayerEvent};
 use crate::local_players::LocalPlayers;
-use crate::resources::{AdminPanelState, ClientMatchSlots, GameTick, LoadedMap, NetworkChannels};
+use crate::resources::{AdminPanelState, ClientMatchGame, ClientMatchSlots, GameTick, LoadedMap, NetworkChannels};
 use crate::shared::protocol::{GameConfig, ServerMessage};
 
 #[derive(SystemParam)]
@@ -26,6 +26,7 @@ pub struct NetworkParams<'w, 's> {
     pub spawn_player_events: MessageWriter<'w, SpawnPlayerEvent>,
     pub match_slots: ResMut<'w, ClientMatchSlots>,
     pub admin_state: ResMut<'w, AdminPanelState>,
+    pub match_game: ResMut<'w, ClientMatchGame>,
 }
 
 #[derive(SystemParam)]
@@ -83,6 +84,7 @@ pub fn process_network_messages(mut params: NetworkParams, mut queries: NetworkQ
     let spawn_player_events = &mut params.spawn_player_events;
     let match_slots = &mut params.match_slots;
     let admin_state = &mut params.admin_state;
+    let match_game = &mut params.match_game;
 
     let ball_q = &mut queries.ball_q;
     let players_q = &mut queries.players_q;
@@ -250,6 +252,13 @@ pub fn process_network_messages(mut params: NetworkParams, mut queries: NetworkQ
                         println!("👑 [Bevy] Eres administrador de la sala");
                     }
                 }
+            }
+            ServerMessage::MatchUpdate(state) => {
+                println!(
+                    "🏆 [Bevy] MatchUpdate — {}-{} | tiempo: {:.0}s",
+                    state.score[0], state.score[1], state.time_remaining
+                );
+                match_game.0 = Some(state);
             }
             _ => {}
         }

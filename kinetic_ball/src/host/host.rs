@@ -7,11 +7,16 @@ use std::sync::{Arc, Mutex};
 
 use super::engine::*;
 use super::input::{GameAction, InputSource, NetworkInputSource};
+use super::match_logic::*;
 use super::network::*;
 
 /// Resource for managing player slots in the match
 #[derive(Resource, Default)]
 pub struct HostMatchSlots(pub MatchSlots);
+
+/// Resource que encapsula el estado del partido activo en el host
+#[derive(Resource, Default)]
+pub struct HostMatchGame(pub crate::shared::match_game::MatchGame);
 
 pub fn host(
     map: Option<String>,
@@ -137,30 +142,45 @@ pub fn host(
             TimerMode::Repeating,
         ))) // 60 Hz
         .insert_resource(HostMatchSlots(initial_slots))
+        .insert_resource(HostMatchGame::default())
         .init_resource::<GameInputManager>()
         .add_systems(Startup, (configure_rapier, setup_game, setup_map).chain())
         .add_systems(
             FixedUpdate,
             (
-                update_input_manager,
-                process_network_messages,
-                look_at_ball,
-                toggle_mode,
-                detect_slide,
-                execute_slide,
-                move_players,
-                handle_collision_player,
-                charge_kick,
-                prepare_kick_ball,
-                detect_contact_and_kick,
-                apply_magnus_effect,
-                attract_ball,
-                push_ball_on_contact,
-                update_kick_memory_timer,
-                auto_touch_ball_while_running,
-                dash_first_touch_ball,
-                broadcast_game_state,
-                recover_stamin,
+                // Grupo 1: física y red (sistemas originales)
+                (
+                    update_input_manager,
+                    process_network_messages,
+                    look_at_ball,
+                    toggle_mode,
+                    detect_slide,
+                    execute_slide,
+                    move_players,
+                    handle_collision_player,
+                    charge_kick,
+                    prepare_kick_ball,
+                    detect_contact_and_kick,
+                    apply_magnus_effect,
+                    attract_ball,
+                    push_ball_on_contact,
+                    update_kick_memory_timer,
+                    auto_touch_ball_while_running,
+                    dash_first_touch_ball,
+                    broadcast_game_state,
+                    recover_stamin,
+                )
+                    .chain(),
+                // Grupo 2: lógica de partido (se ejecuta después del grupo 1)
+                (
+                    update_ball_touch,      // ← registra último toque y limpia pending_set_piece
+                    tick_match_time,
+                    reset_ball_for_kickoff, // ← antes de detect_goal: limpia pending_kickoff
+                    detect_goal,
+                    detect_ball_out,
+                    broadcast_match_state,
+                )
+                    .chain(),
             )
                 .chain(),
         )
@@ -360,6 +380,11 @@ pub enum NetworkEvent {
         admin_peer_id: PeerId,
         player_id: u32,
         is_admin: bool,
+    },
+    /// Admin solicita iniciar el partido
+    StartMatch {
+        admin_peer_id: PeerId,
+        duration_secs: f32,
     },
 }
 

@@ -1,4 +1,5 @@
 use super::map::Map;
+use super::match_game::MatchGameState;
 use super::match_slots::MatchSlots;
 use bevy::{
     math::UVec2,
@@ -121,6 +122,15 @@ pub enum ControlMessage {
     },
     /// Slots updated - sent by server when players are moved between slots
     SlotsUpdated(MatchSlots),
+
+    // ---- Partido ----
+    /// El admin solicita iniciar el partido (del cliente)
+    StartMatch {
+        /// Duración del partido en segundos (ej: 300.0 = 5 minutos)
+        duration_secs: f32,
+    },
+    /// El servidor difunde el estado actualizado del partido
+    MatchUpdate(MatchGameState),
 }
 
 /// Mensajes de alta frecuencia que toleran pérdida (Canal Unreliable)
@@ -234,6 +244,9 @@ pub enum ServerMessage {
 
     /// Slots updated - internal message for client processing
     SlotsUpdated(MatchSlots),
+
+    /// Estado del partido actualizado (difundido por el host)
+    MatchUpdate(MatchGameState),
 }
 
 /// Movimiento activo de un jugador
