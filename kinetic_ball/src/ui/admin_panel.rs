@@ -413,8 +413,17 @@ fn render_match_section(
 
     match &match_game.0 {
         // ── Partido en curso o en cuenta regresiva ─────────────────────────
-        Some(state) if !matches!(state.status, MatchStatus::WaitingToStart) => {
+        Some(state) if matches!(state.status, MatchStatus::Running | MatchStatus::GoalScored { .. }) => {
             render_match_status(ui, state);
+        }
+
+        // ── Partido terminado — mostrar resultado y permitir nuevo partido ──
+        Some(state) if matches!(state.status, MatchStatus::Ended) => {
+            render_match_status(ui, state);
+            if admin_state.is_admin {
+                ui.add_space(6.0);
+                render_match_config(ui, admin_state, channels);
+            }
         }
 
         // ── Sin partido (esperando inicio o None) ─────────────────────────
