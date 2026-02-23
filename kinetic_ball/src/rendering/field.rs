@@ -15,7 +15,22 @@ use crate::shared::protocol::GameConfig;
 
 // Constante Z para las líneas del mapa (entre el piso Z=0 y los jugadores Z=10+)
 pub const MAP_LINES_Z: f32 = 5.0;
+/// Grosor para paredes externas y estructuras de arco
 pub const LINE_THICKNESS: f32 = 3.0;
+/// Grosor para las líneas divisorias interiores del campo (línea de medio, áreas, etc.)
+pub const FIELD_MARKING_THICKNESS: f32 = 15.0;
+
+/// Convierte un color hexadecimal de mapa (ej: "ff4444") a `Color`.
+fn parse_hex_color(hex: &str) -> Option<Color> {
+    let hex = hex.trim_start_matches('#');
+    if hex.len() < 6 {
+        return None;
+    }
+    let r = u8::from_str_radix(&hex[0..2], 16).ok()? as f32 / 255.0;
+    let g = u8::from_str_radix(&hex[2..4], 16).ok()? as f32 / 255.0;
+    let b = u8::from_str_radix(&hex[4..6], 16).ok()? as f32 / 255.0;
+    Some(Color::srgb(r, g, b))
+}
 
 // Sistema para ocultar líneas por defecto, ajustar campo y crear líneas del mapa
 pub fn adjust_field_for_map(
@@ -125,15 +140,7 @@ pub fn spawn_map_lines(
     // Colores según tipo de interacción
     let ball_color = Color::srgb(0.3, 0.7, 1.0); // Azul claro - solo pelota
     let player_color = Color::srgb(0.3, 1.0, 0.5); // Verde claro - solo jugadores
-    let decorative_color = Color::srgb(0.5, 0.5, 0.5); // Gris - decorativo sin física
-    let vertex_color = Color::srgb(1.0, 0.2, 0.2); // Rojo para vértices
-    let disc_color = Color::srgb(0.7, 0.7, 0.7); // Gris para discos
-
-    // Dibujar vértices (círculos pequeños)
-    for vertex in &map.vertexes {
-        let pos = Vec2::new(vertex.x, vertex.y);
-        spawn_circle(commands, meshes, materials, pos, 3.0, vertex_color);
-    }
+    let decorative_color = Color::WHITE; // Blanco - líneas divisorias del campo
 
     // Dibujar segmentos (líneas)
     for segment in &map.segments {
@@ -151,46 +158,64 @@ pub fn spawn_map_lines(
         let p0 = Vec2::new(v0.x, v0.y);
         let p1 = Vec2::new(v1.x, v1.y);
 
-        // Determinar color según cMask
-        let line_color = if let Some(cmask) = &segment.c_mask {
-            if cmask.is_empty() || cmask.iter().any(|m| m.is_empty()) {
-                decorative_color
-            } else if cmask.iter().any(|m| m == "ball")
+        // Determinar si es línea decorativa (sin colisión) o física
+        let is_decorative = segment.c_mask.as_ref().map_or(true, |m| {
+            m.is_empty() || m.iter().all(|s| s.is_empty())
+        });
+
+        // Determinar color según cMask (o color del mapa si decorativa)
+        let line_color = if is_decorative {
+            // Usar color definido en el mapa, si existe
+            segment
+                .color
+                .as_deref()
+                .and_then(parse_hex_color)
+                .unwrap_or(decorative_color)
+        } else if let Some(cmask) = &segment.c_mask {
+            if cmask.iter().any(|m| m == "ball")
                 && !cmask.iter().any(|m| m == "red" || m == "blue")
             {
                 ball_color
-            } else if cmask.iter().any(|m| m == "red" || m == "blue") {
-                player_color
             } else {
-                decorative_color
+                player_color
             }
         } else {
             decorative_color
         };
 
+        // Las líneas divisorias interiores son más gruesas que las paredes
+        let thickness = if is_decorative { FIELD_MARKING_THICKNESS } else { LINE_THICKNESS };
+
         let curve_factor = segment.curve.or(segment.curve_f).unwrap_or(0.0);
 
         if curve_factor.abs() < 0.01 {
-            // Segmento recto
-            spawn_line_segment(commands, p0, p1, line_color);
+            spawn_line_segment(commands, p0, p1, line_color, thickness);
         } else {
-            // Segmento curvo - aproximar con múltiples líneas
             let points = approximate_curve_for_rendering(p0, p1, curve_factor, 24);
             for i in 0..points.len() - 1 {
-                spawn_line_segment(commands, points[i], points[i + 1], line_color);
+                spawn_line_segment(commands, points[i], points[i + 1], line_color, thickness);
             }
         }
     }
 
-    // Dibujar discos (círculos)
+    // Dibujar palos del arco: anillo de color de equipo + relleno blanco.
+    // El equipo se deduce por el lado del campo: X < 0 → rojo, X > 0 → azul.
     for disc in &map.discs {
         let pos = Vec2::new(disc.pos[0], disc.pos[1]);
-        spawn_circle_outline(commands, meshes, materials, pos, disc.radius, disc_color);
+        let team_color = if disc.pos[0] < 0.0 {
+            Color::srgb(1.0, 0.25, 0.25) // rojo
+        } else {
+            Color::srgb(0.25, 0.45, 1.0) // azul
+        };
+        // Anillo exterior con el color del equipo
+        spawn_circle(commands, meshes, materials, pos, disc.radius + 8.0, team_color);
+        // Relleno blanco (el poste)
+        spawn_circle(commands, meshes, materials, pos, disc.radius, Color::WHITE);
     }
 }
 
 // Crea un sprite rectangular para representar una línea
-pub fn spawn_line_segment(commands: &mut Commands, p0: Vec2, p1: Vec2, color: Color) {
+pub fn spawn_line_segment(commands: &mut Commands, p0: Vec2, p1: Vec2, color: Color, thickness: f32) {
     let delta = p1 - p0;
     let length = delta.length();
     if length < 0.01 {
@@ -204,7 +229,7 @@ pub fn spawn_line_segment(commands: &mut Commands, p0: Vec2, p1: Vec2, color: Co
         InGameEntity,
         Sprite {
             color,
-            custom_size: Some(Vec2::new(length, LINE_THICKNESS)),
+            custom_size: Some(Vec2::new(length, thickness)),
             ..default()
         },
         Transform::from_xyz(midpoint.x, midpoint.y, MAP_LINES_Z)
