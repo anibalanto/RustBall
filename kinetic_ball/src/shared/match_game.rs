@@ -49,18 +49,18 @@ pub enum SetPiece {
     Corner { team: u8, position: Vec2 },
     /// Saque de puerta: equipo que saca, posición del arco
     GoalKick { team: u8, position: Vec2 },
-    /// Saque de centro (inicio o tras gol)
-    KickOff,
+    /// Saque de centro (inicio o tras gol): equipo que saca
+    KickOff { team: u8 },
 }
 
 impl SetPiece {
-    /// Posición del punto de reanudación. `None` para KickOff (siempre en centro).
+    /// Posición del punto de reanudación.
     pub fn position(&self) -> Option<Vec2> {
         match self {
             SetPiece::Lateral { position, .. } => Some(*position),
             SetPiece::Corner { position, .. } => Some(*position),
             SetPiece::GoalKick { position, .. } => Some(*position),
-            SetPiece::KickOff => None,
+            SetPiece::KickOff { .. } => Some(Vec2::ZERO),
         }
     }
 
@@ -70,7 +70,7 @@ impl SetPiece {
             SetPiece::Lateral { team, .. } => *team,
             SetPiece::Corner { team, .. } => *team,
             SetPiece::GoalKick { team, .. } => *team,
-            SetPiece::KickOff => 0,
+            SetPiece::KickOff { team } => *team,
         }
     }
 }
@@ -92,8 +92,8 @@ pub struct MatchGame {
     pub status: MatchStatus,
     /// Último equipo que tocó la pelota (para determinar lateral/corner)
     pub last_team_touch: Option<u8>,
-    /// Saque de centro pendiente (tras gol o inicio)
-    pub pending_kickoff: bool,
+    /// Saque de centro pendiente: `Some(team)` → equipo que saca, `None` → sin kickoff
+    pub pending_kickoff: Option<u8>,
     /// Set piece pendiente
     pub pending_set_piece: Option<SetPiece>,
     /// Cuenta regresiva antes de teleportar la pelota al punto de reanudación.
@@ -186,7 +186,7 @@ impl MatchOps for MatchGame {
             duration: duration_secs,
             status: MatchStatus::WaitingToStart,
             last_team_touch: None,
-            pending_kickoff: true,
+            pending_kickoff: Some(0), // equipo 0 saca de inicio por defecto
             pending_set_piece: None,
             set_piece_delay_timer: None,
         }
@@ -195,7 +195,7 @@ impl MatchOps for MatchGame {
     fn start(&mut self) {
         if matches!(self.status, MatchStatus::WaitingToStart) {
             self.status = MatchStatus::Running;
-            self.pending_kickoff = true;
+            self.pending_kickoff = Some(0);
             println!(
                 "🏆 Partido iniciado — duración: {}s",
                 self.duration
@@ -222,7 +222,8 @@ impl MatchOps for MatchGame {
                 let new_countdown = countdown - delta_secs;
                 if new_countdown <= 0.0 {
                     self.status = MatchStatus::Running;
-                    self.pending_kickoff = true;
+                    // El equipo que recibió el gol saca de centro (regla estándar)
+                    self.pending_kickoff = Some(1 - scoring_team);
                     self.last_team_touch = None;
                     println!("▶️  Reanudando partido después de gol");
                 } else {
@@ -423,7 +424,7 @@ mod tests {
         m.score_goal(0);
         m.tick(3.5); // Supera el countdown de 3 segundos
         assert!(m.is_running());
-        assert!(m.pending_kickoff);
+        assert!(m.pending_kickoff.is_some());
     }
 
     #[test]

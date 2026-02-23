@@ -211,7 +211,7 @@ pub fn detect_goal(
 ) {
     // Solo detectar goles cuando el partido está en curso, no hay kickoff pendiente
     // y no hay un set piece en curso (pelota fuera de juego).
-    if !match_game.0.is_running() || match_game.0.pending_kickoff || match_game.0.pending_set_piece.is_some() {
+    if !match_game.0.is_running() || match_game.0.pending_kickoff.is_some() || match_game.0.pending_set_piece.is_some() {
         return;
     }
 
@@ -353,10 +353,10 @@ pub fn reset_ball_for_kickoff(
     mut ball_query: Query<(&mut Transform, &mut Velocity), With<Ball>>,
     network_tx: Res<NetworkSender>,
 ) {
-    if !match_game.0.pending_kickoff {
+    let Some(kickoff_team) = match_game.0.pending_kickoff else {
         return;
-    }
-    match_game.0.pending_kickoff = false;
+    };
+    match_game.0.pending_kickoff = None;
 
     let Ok((mut transform, mut velocity)) = ball_query.single_mut() else {
         return;
@@ -367,7 +367,12 @@ pub fn reset_ball_for_kickoff(
     velocity.linvel = Vec2::ZERO;
     velocity.angvel = 0.0;
 
-    println!("🔄 Saque de centro — pelota recentrada");
+    // Registrar como set piece para activar zona de exclusión (igual que lateral/corner/saque)
+    match_game.0.pending_set_piece = Some(SetPiece::KickOff { team: kickoff_team });
+    match_game.0.set_piece_delay_timer = None; // pelota ya colocada en centro
+    match_game.0.last_team_touch = None;
+
+    println!("🔄 Saque de centro — equipo {} saca", kickoff_team);
     broadcast_match_update(&match_game.0, &network_tx);
 }
 
@@ -435,7 +440,7 @@ pub fn enforce_set_piece_exclusion(
     };
 
     let Some(set_piece_pos) = set_piece.position() else {
-        return; // KickOff no tiene zona de exclusión
+        return;
     };
     let kicking_team = set_piece.team();
     let exclusion_radius = config.set_piece_exclusion_radius + config.sphere_radius;
