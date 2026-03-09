@@ -11,7 +11,7 @@ use std::f32::consts::FRAC_PI_2;
 
 use crate::components::{
     CompositorCamera, CurveAction, DefaultFieldLine, FieldBackground, GameUiCamera, InGameEntity,
-    KeyVisual, MinimapCamera, PlayerCamera, PlayerDetailCamera, SplitScreenQuad,
+    KeyVisual, MinimapCamera, PlayerCamera, SplitScreenQuad,
 };
 use crate::local_players::LocalPlayers;
 use crate::resources::{DynamicSplitState, SplitScreenMaterial, SplitScreenTextures};
@@ -253,7 +253,6 @@ pub fn setup(
     // --- Crear texturas de render target para ViewportNodes ---
 
     let minimap_size = config.minimap_size;
-    let detail_size = config.player_detail_size;
 
     // Textura para minimapa
     let mut minimap_image = Image::new_uninit(
@@ -293,50 +292,6 @@ pub fn setup(
             RenderLayers::layer(1),
         ))
         .id();
-
-    // --- Crear cámaras de detalle para cada jugador local ---
-    let mut detail_cameras: Vec<Entity> = Vec::new();
-    for i in 0..num_local_players.min(2) {
-        // Crear textura de detalle para este jugador
-        let mut detail_image = Image::new_uninit(
-            bevy::render::render_resource::Extent3d {
-                width: detail_size.x,
-                height: detail_size.y,
-                depth_or_array_layers: 1,
-            },
-            TextureDimension::D2,
-            TextureFormat::Bgra8UnormSrgb,
-            RenderAssetUsages::all(),
-        );
-        detail_image.texture_descriptor.usage = TextureUsages::TEXTURE_BINDING
-            | TextureUsages::COPY_DST
-            | TextureUsages::RENDER_ATTACHMENT;
-        let detail_image_handle = images.add(detail_image);
-
-        let detail_camera = commands
-            .spawn((
-                InGameEntity,
-                Camera2d,
-                Camera {
-                    order: -1 - i as isize, // Renderiza antes que la principal
-                    target: RenderTarget::Image(detail_image_handle.clone().into()),
-                    clear_color: ClearColorConfig::Custom(Color::srgba(0.2, 0.2, 0.2, 0.6)),
-                    ..default()
-                },
-                Projection::Orthographic(OrthographicProjection {
-                    scale: 1.5,
-                    ..OrthographicProjection::default_2d()
-                }),
-                Transform::from_xyz(0.0, 0.0, 999.0),
-                PlayerDetailCamera {
-                    local_index: i as u8,
-                },
-                RenderLayers::layer(2),
-            ))
-            .id();
-
-        detail_cameras.push(detail_camera);
-    }
 
     // --- Cámara UI dedicada (sin viewport, renderiza UI en pantalla completa) ---
     let ui_camera = commands
@@ -380,32 +335,6 @@ pub fn setup(
             Pickable::IGNORE,
         ))
         .with_children(|parent| {
-            // Detalle del jugador 1 (izquierda abajo) - circular
-            if let Some(&detail_cam) = detail_cameras.first() {
-                parent.spawn((
-                    Node {
-                        width: Val::Px(detail_size.x as f32),
-                        height: Val::Px(detail_size.y as f32),
-                        border: UiRect::all(Val::Px(3.0)),
-                        ..default()
-                    },
-                    BorderColor::all(Color::WHITE),
-                    BorderRadius::all(Val::Percent(50.0)), // Circular
-                    BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)),
-                    ViewportNode::new(detail_cam),
-                ));
-            } else {
-                // Espaciador si no hay jugadores
-                parent.spawn((
-                    Node {
-                        width: Val::Px(detail_size.x as f32),
-                        height: Val::Px(detail_size.y as f32),
-                        ..default()
-                    },
-                    Visibility::Hidden,
-                ));
-            }
-
             // Minimapa (centro abajo)
             parent.spawn((
                 Node {
@@ -419,32 +348,6 @@ pub fn setup(
                 BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)),
                 ViewportNode::new(minimap_camera),
             ));
-
-            // Detalle del jugador 2 (derecha abajo) - circular
-            if let Some(&detail_cam) = detail_cameras.get(1) {
-                parent.spawn((
-                    Node {
-                        width: Val::Px(detail_size.x as f32),
-                        height: Val::Px(detail_size.y as f32),
-                        border: UiRect::all(Val::Px(3.0)),
-                        ..default()
-                    },
-                    BorderColor::all(Color::WHITE),
-                    BorderRadius::all(Val::Percent(50.0)), // Circular
-                    BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)),
-                    ViewportNode::new(detail_cam),
-                ));
-            } else if num_local_players == 1 {
-                // Espaciador para mantener el minimapa centrado cuando hay 1 jugador
-                parent.spawn((
-                    Node {
-                        width: Val::Px(detail_size.x as f32),
-                        height: Val::Px(detail_size.y as f32),
-                        ..default()
-                    },
-                    Visibility::Hidden,
-                ));
-            }
         });
 
     // El Campo de Juego (Césped) - Color verde - Layer 0

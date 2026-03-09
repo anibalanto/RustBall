@@ -40,11 +40,6 @@ pub struct MenuCamera;
 #[derive(Component)]
 pub struct MinimapCamera;
 
-#[derive(Component)]
-pub struct PlayerDetailCamera {
-    pub local_index: u8,
-}
-
 /// Cámara dedicada para UI que no tiene viewport (renderiza pantalla completa)
 #[derive(Component)]
 pub struct GameUiCamera;

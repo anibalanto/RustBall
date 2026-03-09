@@ -51,7 +51,7 @@ pub fn handle_spawn_ball(
                         ..default()
                     },
                     Transform::from_xyz(0.0, 0.0, 1.0),
-                    RenderLayers::from_layers(&[0, 2]),
+                    RenderLayers::layer(0),
                 ));
             });
     }
@@ -73,20 +73,10 @@ pub fn handle_spawn_player(
         let ps = &event.player_state;
         let is_local = event.is_local;
 
-        let public_player_layers = if is_local {
-            RenderLayers::from_layers(&[0, 2])
-        } else {
-            RenderLayers::layer(0)
-        };
+        let public_player_layers = RenderLayers::layer(0);
 
         let private_player_layers = if is_local {
-            RenderLayers::from_layers(&[0, 2])
-        } else {
-            RenderLayers::none()
-        };
-
-        let preview_player_layers = if is_local {
-            RenderLayers::layer(2)
+            RenderLayers::layer(0)
         } else {
             RenderLayers::none()
         };
@@ -190,7 +180,7 @@ pub fn handle_spawn_player(
                         .with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_4))
                         .with_scale(Vec3::splat(cube_scale)),
                     SlideCubeVisual { parent_id: ps.id },
-                    preview_player_layers.clone(),
+                    private_player_layers.clone(),
                 ));
 
                 // Barra de carga de patada
@@ -258,7 +248,7 @@ pub fn handle_spawn_player(
                         rotation: Quat::from_rotation_z(angle_90),
                         ..default()
                     },
-                    preview_player_layers.clone(),
+                    private_player_layers.clone(),
                 ));
 
                 // Nombre del jugador debajo del sprite
@@ -339,7 +329,7 @@ pub fn handle_spawn_player(
                     Quat::IDENTITY,
                     &mut meshes,
                     &mut materials,
-                    preview_player_layers.clone(),
+                    private_player_layers.clone(),
                 );
 
                 // Sur (S) - abajo
@@ -352,7 +342,7 @@ pub fn handle_spawn_player(
                     Quat::IDENTITY,
                     &mut meshes,
                     &mut materials,
-                    preview_player_layers.clone(),
+                    private_player_layers.clone(),
                 );
 
                 // Este (D) - derecha
@@ -365,7 +355,7 @@ pub fn handle_spawn_player(
                     Quat::from_rotation_z(-angle_90),
                     &mut meshes,
                     &mut materials,
-                    preview_player_layers.clone(),
+                    private_player_layers.clone(),
                 );
 
                 // Oeste (A) - izquierda
@@ -378,7 +368,7 @@ pub fn handle_spawn_player(
                     Quat::from_rotation_z(-angle_90),
                     &mut meshes,
                     &mut materials,
-                    preview_player_layers.clone(),
+                    private_player_layers.clone(),
                 );
                  */
             });

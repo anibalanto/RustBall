@@ -1,8 +1,6 @@
 use bevy::prelude::*;
 
-use crate::components::{
-    MinimapCamera, PlayerCamera, PlayerDetailCamera, RemoteBall, RemotePlayer,
-};
+use crate::components::{MinimapCamera, PlayerCamera, RemoteBall, RemotePlayer};
 use crate::local_players::LocalPlayers;
 use crate::resources::{DynamicSplitState, MyPlayerId};
 
@@ -16,21 +14,15 @@ pub fn camera_follow_player_and_ball(
             With<RemoteBall>,
             Without<PlayerCamera>,
             Without<MinimapCamera>,
-            Without<PlayerDetailCamera>,
         ),
     >,
     players: Query<
         (&RemotePlayer, &Transform),
-        (
-            Without<PlayerCamera>,
-            Without<MinimapCamera>,
-            Without<PlayerDetailCamera>,
-        ),
+        (Without<PlayerCamera>, Without<MinimapCamera>),
     >,
     mut cameras: ParamSet<(
         Query<(&mut Transform, &PlayerCamera)>,
         Query<&mut Transform, With<MinimapCamera>>,
-        Query<(&mut Transform, &PlayerDetailCamera)>,
     )>,
     time: Res<Time>,
     windows: Query<&Window>,
@@ -143,33 +135,6 @@ pub fn camera_follow_player_and_ball(
         }
     }
 
-    // 5. Cámaras de Detalle (cada una sigue a su jugador local correspondiente)
-    for (mut cam_transform, detail_camera) in cameras.p2().iter_mut() {
-        // Buscar el jugador local correspondiente a esta cámara de detalle
-        let target_player_id = local_players
-            .players
-            .get(detail_camera.local_index as usize)
-            .and_then(|lp| lp.server_player_id)
-            .or_else(|| {
-                // Fallback: si no hay jugador local, usar my_player_id para la primera cámara
-                if detail_camera.local_index == 0 {
-                    my_player_id.0
-                } else {
-                    None
-                }
-            });
-
-        if let Some(target_id) = target_player_id {
-            if let Some(p_pos) = players
-                .iter()
-                .find(|(p, _)| p.id == target_id)
-                .map(|(_, t)| t.translation)
-            {
-                cam_transform.translation.x = p_pos.x;
-                cam_transform.translation.y = p_pos.y;
-            }
-        }
-    }
 }
 
 // Sistema de control de zoom con teclas numéricas
