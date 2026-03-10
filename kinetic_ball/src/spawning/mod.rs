@@ -112,6 +112,7 @@ pub fn handle_spawn_player(
                     kick_vec: ps.kick_vec,
                     is_straight_kick: ps.is_straight_kick,
                     is_sliding: ps.is_sliding,
+                    slide_direction: ps.slide_direction,
                     not_interacting: ps.not_interacting,
                     base_color: player_color,
                     ball_target_position: ps.ball_target_position,

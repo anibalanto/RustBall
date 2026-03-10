@@ -345,6 +345,7 @@ pub fn process_network_messages(mut params: NetworkParams, mut queries: NetworkQ
                     rp.kick_vec = ps.kick_vec;
                     rp.is_straight_kick = ps.is_straight_kick;
                     rp.is_sliding = ps.is_sliding;
+                    rp.slide_direction = ps.slide_direction;
                     rp.ball_target_position = ps.ball_target_position;
                     rp.stamin_charge = ps.stamin_charge;
                     rp.active_movement = ps.active_movement.clone();

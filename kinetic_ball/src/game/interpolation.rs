@@ -40,13 +40,13 @@ pub fn interpolate_entities(time: Res<Time>, mut q: Query<(&mut Transform, &Inte
 // Sistema para procesar movimientos activos y actualizar el cubo de dirección
 pub fn process_movements(
     game_tick: Res<GameTick>,
-    player_query: Query<(&RemotePlayer, &Children)>,
-    mut cube_query: Query<(&SlideCubeVisual, &mut Transform)>,
+    player_query: Query<(&RemotePlayer, &Children, &Transform), Without<SlideCubeVisual>>,
+    mut cube_query: Query<(&SlideCubeVisual, &mut Transform), Without<RemotePlayer>>,
     config: Res<GameConfig>,
 ) {
     let current_tick = game_tick.0;
 
-    for (player, children) in player_query.iter() {
+    for (player, children, parent_transform) in player_query.iter() {
         // Obtener el movimiento activo del jugador (si existe)
         let Some(ref active_movement) = player.active_movement else {
             continue;
@@ -89,14 +89,21 @@ pub fn process_movements(
                     cube_transform.scale = Vec3::splat(scale);
                 }
 
-                // OffsetX (multiplicador del radio)
+                // OffsetX (multiplicador del radio) — se aplica a lo largo de slide_direction
+                // en espacio mundo, luego se convierte a local dividiendo por la rotación del padre.
                 if let Some(offset_mult) = movement.evaluate(AnimatedProperty::OffsetX, progress) {
-                    cube_transform.translation.x = config.sphere_radius * offset_mult;
-                }
-
-                // OffsetY (multiplicador del radio)
-                if let Some(offset_mult) = movement.evaluate(AnimatedProperty::OffsetY, progress) {
-                    cube_transform.translation.y = config.sphere_radius * offset_mult;
+                    let dir = if player.slide_direction.length() > 0.01 {
+                        player.slide_direction.normalize()
+                    } else {
+                        Vec2::X
+                    };
+                    let world_offset = dir * config.sphere_radius * offset_mult;
+                    // Rotar al espacio local del padre (inverso de la rotación del padre)
+                    let (_, _, parent_angle) = parent_transform.rotation.to_euler(EulerRot::XYZ);
+                    let cos_a = parent_angle.cos();
+                    let sin_a = parent_angle.sin();
+                    cube_transform.translation.x = world_offset.x * cos_a + world_offset.y * sin_a;
+                    cube_transform.translation.y = -world_offset.x * sin_a + world_offset.y * cos_a;
                 }
 
                 // Rotación adicional (se suma a la base de 45°)

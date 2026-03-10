@@ -665,6 +665,7 @@ pub fn broadcast_game_state(
                     is_straight_kick: player.is_straight_kick,
                     kick_charging: player.kick_charging,
                     is_sliding: player.is_sliding,
+                    slide_direction: player.slide_direction,
                     not_interacting: player.not_interacting,
                     ball_target_position: player.ball_target_position,
                     stamin_charge: player.stamin,

@@ -275,6 +275,7 @@ pub struct PlayerState {
     pub is_straight_kick: bool, // true si la carga fue iniciada con X (sin comba)
     pub kick_charging: bool,
     pub is_sliding: bool,
+    pub slide_direction: Vec2,
     pub not_interacting: bool,
     pub ball_target_position: Option<Vec2>,
     pub stamin_charge: f32,

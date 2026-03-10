@@ -74,6 +74,7 @@ pub struct RemotePlayer {
     pub kick_vec: Vec2,      // straight: x crece; NSEO: crece en dirección; length() = potencia
     pub is_straight_kick: bool,
     pub is_sliding: bool,
+    pub slide_direction: Vec2,
     pub not_interacting: bool,
     pub base_color: Color,
     pub ball_target_position: Option<Vec2>,
