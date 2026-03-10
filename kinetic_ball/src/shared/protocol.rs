@@ -21,7 +21,11 @@ pub struct ProtocolVersion {
 
 impl ProtocolVersion {
     pub const fn new(major: u16, minor: u16, patch: u16) -> Self {
-        Self { major, minor, patch }
+        Self {
+            major,
+            minor,
+            patch,
+        }
     }
 
     /// Versión actual del cliente (se obtiene de Cargo.toml en tiempo de compilación)
@@ -299,7 +303,7 @@ pub struct GameConfig {
     // Velocidades básicas
     pub player_speed_walking: f32,
     pub run_coeficient: f32,
-    pub run_cube_coeficient: f32,
+    pub run_cube_extra_coeficient: f32,
     pub kick_force: f32,
     pub attract_force: f32,
     pub magnus_coefficient: f32,
@@ -337,6 +341,7 @@ pub struct GameConfig {
     pub dash_stamin_cost: f32,
     pub slide_stamin_cost: f32,
     pub run_stamin_coeficient_cost: f32,
+    pub run_cube_stamin_coeficient_extra_cost: f32,
     pub stamin_coeficient_restore: f32,
 
     //Slide
@@ -374,7 +379,7 @@ impl Default for GameConfig {
             // Velocidades básicas
             player_speed_walking: 300.0,
             run_coeficient: 1.4,
-            run_cube_coeficient: 1.6,
+            run_cube_extra_coeficient: 0.2,
             kick_force: 4000000.0,
             attract_force: 400.0,
             magnus_coefficient: 33.0,
@@ -411,7 +416,8 @@ impl Default for GameConfig {
             stamin: 1.0,
             dash_stamin_cost: 0.02,
             slide_stamin_cost: 0.02,
-            run_stamin_coeficient_cost: 0.02,
+            run_stamin_coeficient_cost: 0.1,
+            run_cube_stamin_coeficient_extra_cost: 0.05,
             stamin_coeficient_restore: 0.08,
 
             //Slide

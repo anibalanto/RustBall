@@ -168,22 +168,26 @@ pub fn move_players(
             }
 
             if movement.length() > 0.0 {
-                let run_stamin_cost = time.delta_secs() * config.run_stamin_coeficient_cost;
-
-                let move_coeficient = if player.mode_cube_active
+                let (stamin_cost, move_coeficient) = if player.mode_cube_active
                     && game_input.is_pressed(player_id, GameAction::Sprint)
                 {
-                    player.stamin -= (1.0 + config.run_cube_coeficient - config.run_coeficient)
-                        * run_stamin_cost;
-                    config.run_cube_coeficient
+                    (
+                        time.delta_secs()
+                            * (config.run_stamin_coeficient_cost
+                                + config.run_cube_stamin_coeficient_extra_cost),
+                        config.run_coeficient + config.run_cube_extra_coeficient,
+                    )
                 } else if player.mode_cube_active
                     || game_input.is_pressed(player_id, GameAction::Sprint)
                 {
-                    player.stamin -= run_stamin_cost;
-                    config.run_coeficient
+                    (
+                        time.delta_secs() * config.run_stamin_coeficient_cost,
+                        config.run_coeficient,
+                    )
                 } else {
-                    1.0
+                    (0.0, 1.0)
                 };
+                player.stamin -= stamin_cost;
 
                 velocity.linvel =
                     movement.normalize_or_zero() * config.player_speed_walking * move_coeficient;
@@ -363,7 +367,9 @@ pub fn attract_ball(
         (With<Ball>, Without<Sphere>),
     >,
 ) {
-    if lock.0 { return; }
+    if lock.0 {
+        return;
+    }
     for player in player_query.iter() {
         // No funciona en modo cubo
         if player.mode_cube_active {
@@ -441,7 +447,9 @@ pub fn push_ball_on_contact(
     sphere_query: Query<(&Transform, &Velocity), (With<Sphere>, Without<Ball>)>,
     mut ball_query: Query<(&Transform, &mut ExternalImpulse), (With<Ball>, Without<Sphere>)>,
 ) {
-    if lock.0 { return; }
+    if lock.0 {
+        return;
+    }
     // Radio de contacto: cuando los colliders se tocan
     let contact_radius = config.sphere_radius + config.ball_radius + 5.0;
     let push_force = 8000.0; // Fuerza de empuje base
@@ -568,7 +576,9 @@ pub fn auto_touch_ball_while_running(
     sphere_query: Query<(&Transform, &Velocity), (With<Sphere>, Without<Ball>)>,
     mut ball_query: Query<(&Transform, &mut Velocity), With<Ball>>,
 ) {
-    if lock.0 { return; }
+    if lock.0 {
+        return;
+    }
     let activation_radius = config.sphere_radius + config.ball_radius + 5.0;
     let default_kick_force = 700.0;
 
@@ -906,7 +916,9 @@ pub fn dash_first_touch_ball(
     sphere_query: Query<(&Transform, &Velocity), (With<Sphere>, Without<Ball>)>,
     mut ball_query: Query<(&Transform, &mut Velocity), With<Ball>>,
 ) {
-    if lock.0 { return; }
+    if lock.0 {
+        return;
+    }
     let player_diameter = config.sphere_radius * 2.0;
     let target_distance = player_diameter * 1.5;
     let activation_radius = config.sphere_radius + config.ball_radius + 50.0;
@@ -995,8 +1007,10 @@ pub fn recover_stamin(
             if player.stamin > 1.0 {
                 player.stamin = 1.0;
             } else if player.stamin < 1.0 {
+                // En modo cubo la esfera está quieta aunque el jugador se mueva;
+                // no restaurar estamina mientras el modo cubo esté activo.
                 let speed = velocity.linvel.length();
-                if speed <= config.player_speed_walking * 1.1 {
+                if !player.mode_cube_active && speed <= config.player_speed_walking * 1.1 {
                     player.stamin += time.delta_secs() * config.stamin_coeficient_restore;
                 }
             }
