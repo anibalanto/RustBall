@@ -427,6 +427,7 @@ pub fn apply_set_piece_position(
 pub fn enforce_set_piece_exclusion(
     match_game: Res<HostMatchGame>,
     config: Res<GameConfig>,
+    loaded_map: Res<LoadedMap>,
     player_query: Query<&Player>,
     mut sphere_query: Query<(&Transform, &mut Velocity), (With<Sphere>, Without<Ball>)>,
 ) {
@@ -439,33 +440,66 @@ pub fn enforce_set_piece_exclusion(
         return;
     };
 
+    let max_speed = config.player_speed_walking * 2.0;
+
     let Some(set_piece_pos) = set_piece.position() else {
         return;
     };
     let kicking_team = set_piece.team();
     let exclusion_radius = config.set_piece_exclusion_radius + config.sphere_radius;
 
-    for player in player_query.iter() {
-        if player.team_index == kicking_team {
-            continue; // El equipo que saca puede acercarse libremente
-        }
+    // KickOff: además de la exclusión circular, cada equipo debe permanecer en su propia mitad
+    let kickoff_half_w = if let SetPiece::KickOff { .. } = set_piece {
+        let (half_w, _) = inner_field_half_dims(&loaded_map, &config);
+        Some(half_w)
+    } else {
+        None
+    };
 
+    for player in player_query.iter() {
         let Ok((sphere_transform, mut velocity)) = sphere_query.get_mut(player.sphere) else {
             continue;
         };
-
         let player_pos = sphere_transform.translation.truncate();
+
+        // Confinamiento a la propia mitad (solo KickOff)
+        // No aplica dentro de la esfera de saque: el sacador puede estar en el centro
+        if let Some(half_w) = kickoff_half_w {
+            let dist_to_center = (player_pos - set_piece_pos).length();
+            let inside_exclusion_zone = player.team_index == kicking_team
+                && dist_to_center < exclusion_radius;
+            if !inside_exclusion_zone {
+                let player_x = player_pos.x;
+                let wrong_side = match player.team_index {
+                    0 => player_x > 0.0,
+                    1 => player_x < 0.0,
+                    _ => false,
+                };
+                if wrong_side {
+                    let penetration = player_x.abs().min(half_w);
+                    let push_dir_x = if player.team_index == 0 { -1.0 } else { 1.0 };
+                    let push = Vec2::new(push_dir_x * penetration * 25.0, 0.0);
+                    velocity.linvel += push;
+                    if velocity.linvel.length() > max_speed {
+                        velocity.linvel = velocity.linvel.normalize() * max_speed;
+                    }
+                }
+            }
+        }
+
+        // Exclusión circular: solo aplica al equipo que NO saca
+        if player.team_index == kicking_team {
+            continue;
+        }
+
         let diff = player_pos - set_piece_pos;
         let dist = diff.length();
 
         if dist < exclusion_radius {
             let push_dir = if dist > 1.0 { diff.normalize() } else { Vec2::Y };
             let penetration = exclusion_radius - dist;
-            // Impulso proporcional a la penetración, evitando acumulación indefinida
             let push = push_dir * penetration * 25.0;
             velocity.linvel += push;
-            // Limitar a velocidad caminando * 2 para no lanzar al jugador
-            let max_speed = config.player_speed_walking * 2.0;
             if velocity.linvel.length() > max_speed {
                 velocity.linvel = velocity.linvel.normalize() * max_speed;
             }
