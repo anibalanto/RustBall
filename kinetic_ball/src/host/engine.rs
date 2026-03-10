@@ -249,7 +249,7 @@ pub fn charge_kick(
         }
 
         if any_kick_button && player.kick_charging {
-            let delta = 2.0 * time.delta_secs();
+            let delta = 1.0 * time.delta_secs();
             if player.is_straight_kick {
                 // Acumular potencia en kick_vec.x
                 player.kick_vec.x = (player.kick_vec.x + delta).min(1.0);

@@ -375,7 +375,7 @@ impl Default for GameConfig {
             player_speed_walking: 300.0,
             run_coeficient: 1.4,
             run_cube_coeficient: 1.6,
-            kick_force: 2000000.0,
+            kick_force: 4000000.0,
             attract_force: 400.0,
             magnus_coefficient: 33.0,
 
