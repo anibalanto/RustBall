@@ -83,11 +83,11 @@ pub fn adjust_field_for_map(
                     minimap_sprite.custom_size = Some(Vec2::new(w, h));
                 }
                 // Proyección de la cámara del minimapa
-                // Ajustar para que el mapa llene el minimapa (300x180), 2x más cerca
+                // Ajustar para que el mapa llene el minimapa (300x180)
                 if let Ok(mut projection) = minimap_camera.single_mut() {
                     let minimap_aspect = 300.0 / 180.0; // aspect ratio del minimapa
                     let map_aspect = w / h;
-                    let zoom = 0.5; // 2x más cerca
+                    let zoom = 1.0; // campo completo
 
                     let (cam_w, cam_h) = if map_aspect > minimap_aspect {
                         // Mapa más ancho: el ancho define la escala

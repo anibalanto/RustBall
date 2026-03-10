@@ -325,7 +325,7 @@ pub fn setup(
             Node {
                 width: Val::Percent(100.0),
                 height: Val::Percent(100.0),
-                justify_content: JustifyContent::SpaceBetween,
+                justify_content: JustifyContent::Center,
                 align_items: AlignItems::End,
                 padding: UiRect::all(Val::Px(config.ui_padding)),
                 ..default()
