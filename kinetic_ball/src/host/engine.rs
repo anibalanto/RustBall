@@ -187,25 +187,25 @@ pub fn move_players(
                     velocity.linvel = Vec2::ZERO;
                 }
             } else if movement.length() > 0.0 {
-                let (stamin_cost, move_coeficient) = if player.mode_cube_active
-                    && game_input.is_pressed(player_id, GameAction::Sprint)
-                {
-                    (
-                        time.delta_secs()
-                            * (config.run_stamin_coeficient_cost
-                                + config.run_cube_stamin_coeficient_extra_cost),
-                        config.run_coeficient + config.run_cube_extra_coeficient,
-                    )
-                } else if player.mode_cube_active
-                    || game_input.is_pressed(player_id, GameAction::Sprint)
-                {
-                    (
-                        time.delta_secs() * config.run_stamin_coeficient_cost,
-                        config.run_coeficient,
-                    )
-                } else {
-                    (0.0, 1.0)
-                };
+                let sprint_pressed = game_input.is_pressed(player_id, GameAction::Sprint);
+                let can_sprint = player.stamin > 0.1;
+
+                let (stamin_cost, move_coeficient) =
+                    if player.mode_cube_active && sprint_pressed && can_sprint {
+                        (
+                            time.delta_secs()
+                                * (config.run_stamin_coeficient_cost
+                                    + config.run_cube_stamin_coeficient_extra_cost),
+                            config.run_coeficient + config.run_cube_extra_coeficient,
+                        )
+                    } else if (player.mode_cube_active || sprint_pressed) && can_sprint {
+                        (
+                            time.delta_secs() * config.run_stamin_coeficient_cost,
+                            config.run_coeficient,
+                        )
+                    } else {
+                        (0.0, 1.0)
+                    };
                 player.stamin = (player.stamin - stamin_cost).max(0.0);
 
                 velocity.linvel =
