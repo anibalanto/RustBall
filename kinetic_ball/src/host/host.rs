@@ -298,6 +298,10 @@ pub struct Player {
     pub is_straight_kick: bool, // true si la carga fue iniciada con X (sin comba)
     pub kick_charging: bool,
     pub kick_memory_timer: f32, // Timer de 1 segundo para potencia memorizada
+    /// Dirección memorizada (jugador→pelota normalizada) al soltar el kick.
+    pub kick_approach_dir: Option<Vec2>,
+    /// Tiempo restante de acercamiento automático tras soltar el kick.
+    pub kick_approach_timer: f32,
     pub peer_id: PeerId,        // Matchbox peer ID para enviar mensajes
     pub is_ready: bool,
 

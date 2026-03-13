@@ -115,6 +115,8 @@ pub fn spawn_physics(
         is_straight_kick: false,
         kick_charging: false,
         kick_memory_timer: 0.0,
+        kick_approach_dir: None,
+        kick_approach_timer: 0.0,
         peer_id,
         is_ready: false,
         not_interacting: false,
@@ -167,7 +169,24 @@ pub fn move_players(
                 movement.x += 1.0;
             }
 
-            if movement.length() > 0.0 {
+            // StopInteract cancela el acercamiento automático
+            if game_input.is_pressed(player_id, GameAction::StopInteract) {
+                player.kick_approach_dir = None;
+                player.kick_approach_timer = 0.0;
+            }
+
+            if player.kick_approach_timer > 0.0 {
+                // Acercamiento automático: ignora input manual hasta que expire o se cancele
+                if let Some(approach_dir) = player.kick_approach_dir {
+                    velocity.linvel = approach_dir * config.player_speed_walking;
+                }
+                player.kick_approach_timer -= time.delta_secs();
+                if player.kick_approach_timer <= 0.0 {
+                    player.kick_approach_dir = None;
+                    player.kick_approach_timer = 0.0;
+                    velocity.linvel = Vec2::ZERO;
+                }
+            } else if movement.length() > 0.0 {
                 let (stamin_cost, move_coeficient) = if player.mode_cube_active
                     && game_input.is_pressed(player_id, GameAction::Sprint)
                 {
@@ -272,7 +291,18 @@ pub fn charge_kick(
 
 // Sistema que prepara el kick: memoriza la carga cuando sueltas el botón
 // El kick real se aplica en detect_contact_and_kick cuando hay contacto
-pub fn prepare_kick_ball(game_input: Res<GameInputManager>, mut player_query: Query<&mut Player>) {
+pub fn prepare_kick_ball(
+    config: Res<GameConfig>,
+    game_input: Res<GameInputManager>,
+    mut player_query: Query<&mut Player>,
+    sphere_query: Query<&Transform, (With<Sphere>, Without<Ball>)>,
+    ball_query: Query<&Transform, With<Ball>>,
+) {
+    let Ok(ball_transform) = ball_query.single() else {
+        return;
+    };
+    let ball_pos = ball_transform.translation.truncate();
+
     for mut player in player_query.iter_mut() {
         // No preparar kick en modo cubo
         if player.mode_cube_active || game_input.is_pressed(player.id, GameAction::StopInteract) {
@@ -294,6 +324,16 @@ pub fn prepare_kick_ball(game_input: Res<GameInputManager>, mut player_query: Qu
                 // Memorizar la potencia por 1 segundo
                 // El kick se aplicará cuando haya contacto con la pelota
                 player.kick_memory_timer = 1.0;
+
+                // Memorizar dirección jugador→pelota para acercamiento automático
+                if let Ok(sphere_transform) = sphere_query.get(player.sphere) {
+                    let player_pos = sphere_transform.translation.truncate();
+                    let dir = (ball_pos - player_pos).normalize_or_zero();
+                    if dir.length() > 0.0 {
+                        player.kick_approach_dir = Some(dir);
+                        player.kick_approach_timer = config.kick_approach_duration;
+                    }
+                }
             }
         }
     }
@@ -535,10 +575,12 @@ pub fn detect_contact_and_kick(
 
                     apply_kick(kick_dir, kick_charge, &config, &mut impulse, &mut ball);
 
-                    // Consumir la carga
+                    // Consumir la carga y cancelar acercamiento automático
                     player.kick_vec = Vec2::ZERO;
                     player.is_straight_kick = false;
                     player.kick_memory_timer = 0.0;
+                    player.kick_approach_dir = None;
+                    player.kick_approach_timer = 0.0;
                 }
             }
         }
@@ -553,6 +595,8 @@ pub fn update_kick_memory_timer(time: Res<Time>, mut player_query: Query<&mut Pl
             player.kick_vec = Vec2::ZERO;
             player.is_straight_kick = false;
             player.kick_memory_timer = 0.0;
+            player.kick_approach_dir = None;
+            player.kick_approach_timer = 0.0;
             continue;
         }
 
