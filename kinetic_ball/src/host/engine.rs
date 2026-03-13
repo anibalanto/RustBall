@@ -187,7 +187,7 @@ pub fn move_players(
                 } else {
                     (0.0, 1.0)
                 };
-                player.stamin -= stamin_cost;
+                player.stamin = (player.stamin - stamin_cost).max(0.0);
 
                 velocity.linvel =
                     movement.normalize_or_zero() * config.player_speed_walking * move_coeficient;
