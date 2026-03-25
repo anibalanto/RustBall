@@ -412,7 +412,7 @@ pub fn attract_ball(
     }
     for player in player_query.iter() {
         // No funciona en modo cubo
-        if player.mode_cube_active {
+        if !player.mode_cube_active {
             continue;
         }
 
@@ -472,64 +472,6 @@ pub fn attract_ball(
                         * velocity_factor
                         * 0.016; // ~1/60 para frame
                     impulse.impulse += attract_impulse;
-                }
-            }
-        }
-    }
-}
-
-// Sistema de empuje al caminar: aplica impulso a la pelota cuando el jugador la toca mientras camina
-pub fn push_ball_on_contact(
-    lock: Res<SetPieceLock>,
-    game_input: Res<GameInputManager>,
-    config: Res<GameConfig>,
-    player_query: Query<&Player>,
-    sphere_query: Query<(&Transform, &Velocity), (With<Sphere>, Without<Ball>)>,
-    mut ball_query: Query<(&Transform, &mut ExternalImpulse), (With<Ball>, Without<Sphere>)>,
-) {
-    if lock.0 {
-        return;
-    }
-    // Radio de contacto: cuando los colliders se tocan
-    let contact_radius = config.sphere_radius + config.ball_radius + 5.0;
-    let push_force = 8000.0; // Fuerza de empuje base
-
-    for player in player_query.iter() {
-        // No funciona en modo cubo
-        if player.mode_cube_active {
-            continue;
-        }
-
-        if player.not_interacting {
-            continue;
-        }
-
-        // Solo aplicar al caminar (sin Sprint) - al correr usa touch_ball_while_sprinting
-        if game_input.is_pressed(player.id, GameAction::Sprint) {
-            continue;
-        }
-
-        if let Ok((player_transform, player_velocity)) = sphere_query.get(player.sphere) {
-            let player_speed = player_velocity.linvel.length();
-
-            // Solo empujar si el jugador se está moviendo
-            if player_speed < 10.0 {
-                continue;
-            }
-
-            for (ball_transform, mut impulse) in ball_query.iter_mut() {
-                let diff = ball_transform.translation - player_transform.translation;
-                let distance = diff.truncate().length();
-
-                // Solo aplicar cuando están en contacto
-                if distance < contact_radius && distance > 1.0 {
-                    // Dirección del movimiento del jugador
-                    let push_direction = player_velocity.linvel.normalize_or_zero();
-
-                    // Impulso proporcional a la velocidad del jugador
-                    let push_impulse =
-                        push_direction * push_force * (player_speed / 100.0).min(3.0);
-                    impulse.impulse += push_impulse;
                 }
             }
         }

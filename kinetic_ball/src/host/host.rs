@@ -170,7 +170,6 @@ pub fn host(
                     detect_contact_and_kick,
                     apply_magnus_effect,
                     attract_ball,
-                    push_ball_on_contact,
                     update_kick_memory_timer,
                     auto_touch_ball_while_running,
                     dash_first_touch_ball,
@@ -180,14 +179,14 @@ pub fn host(
                     .chain(),
                 // Grupo 2: lógica de partido (se ejecuta después del grupo 1)
                 (
-                    update_ball_touch,          // registra último toque y limpia pending_set_piece
+                    update_ball_touch, // registra último toque y limpia pending_set_piece
                     tick_match_time,
-                    reset_ball_for_kickoff,     // antes de detect_goal: limpia pending_kickoff
+                    reset_ball_for_kickoff, // antes de detect_goal: limpia pending_kickoff
                     detect_goal,
-                    detect_ball_out,            // detecta salida y arranca timer
-                    apply_set_piece_position,   // teleporta pelota al expirar el timer
+                    detect_ball_out,             // detecta salida y arranca timer
+                    apply_set_piece_position,    // teleporta pelota al expirar el timer
                     enforce_set_piece_exclusion, // empuja al equipo contrario fuera del radio
-                    update_set_piece_lock,      // actualiza SetPieceLock y Dominance de la pelota
+                    update_set_piece_lock,       // actualiza SetPieceLock y Dominance de la pelota
                     broadcast_match_state,
                 )
                     .chain(),
@@ -302,7 +301,7 @@ pub struct Player {
     pub kick_approach_dir: Option<Vec2>,
     /// Tiempo restante de acercamiento automático tras soltar el kick.
     pub kick_approach_timer: f32,
-    pub peer_id: PeerId,        // Matchbox peer ID para enviar mensajes
+    pub peer_id: PeerId, // Matchbox peer ID para enviar mensajes
     pub is_ready: bool,
 
     pub not_interacting: bool,
@@ -363,10 +362,7 @@ pub enum NetworkEvent {
         input: PlayerInput,
     },
     /// Input identificado por player_id directamente (para multijugador local)
-    PlayerInputById {
-        player_id: u32,
-        input: PlayerInput,
-    },
+    PlayerInputById { player_id: u32, input: PlayerInput },
     PlayerDisconnected {
         peer_id: PeerId, // Buscar por peer_id en lugar de por id
     },
@@ -374,9 +370,7 @@ pub enum NetworkEvent {
         peer_id: PeerId, // Buscar por peer_id en lugar de por id
     },
     /// El jugador solicitó salir voluntariamente
-    PlayerLeave {
-        player_id: u32,
-    },
+    PlayerLeave { player_id: u32 },
     /// Admin moves a player to a different slot
     MovePlayer {
         admin_peer_id: PeerId,
@@ -430,7 +424,9 @@ fn setup_game(mut commands: Commands, config: Res<GameConfig>) {
     // Crear pelota (dividido en dos tuplas para no superar el límite de 15 de Bevy)
     commands.spawn((
         (
-            Ball { angular_velocity: 0.0 },
+            Ball {
+                angular_velocity: 0.0,
+            },
             Transform::from_xyz(0.0, 0.0, 0.0),
             GlobalTransform::default(),
             RigidBody::Dynamic,
@@ -442,9 +438,18 @@ fn setup_game(mut commands: Commands, config: Res<GameConfig>) {
         ),
         (
             AdditionalMassProperties::Mass(config.ball_mass),
-            Friction { coefficient: config.ball_friction, combine_rule: CoefficientCombineRule::Average },
-            Restitution { coefficient: config.ball_restitution, combine_rule: CoefficientCombineRule::Min },
-            Damping { linear_damping: config.ball_linear_damping, angular_damping: config.ball_angular_damping },
+            Friction {
+                coefficient: config.ball_friction,
+                combine_rule: CoefficientCombineRule::Average,
+            },
+            Restitution {
+                coefficient: config.ball_restitution,
+                combine_rule: CoefficientCombineRule::Min,
+            },
+            Damping {
+                linear_damping: config.ball_linear_damping,
+                angular_damping: config.ball_angular_damping,
+            },
             ExternalImpulse::default(),
             ExternalForce::default(),
             Ccd::enabled(),
