@@ -208,10 +208,15 @@ pub fn move_players(
                     };
                 player.stamin = (player.stamin - stamin_cost).max(0.0);
 
-                velocity.linvel =
+                let target =
                     movement.normalize_or_zero() * config.player_speed_walking * move_coeficient;
+                velocity.linvel = velocity
+                    .linvel
+                    .move_towards(target, config.player_acceleration * time.delta_secs());
             } else {
-                velocity.linvel = Vec2::ZERO;
+                velocity.linvel = velocity
+                    .linvel
+                    .move_towards(Vec2::ZERO, config.player_acceleration * time.delta_secs());
             }
         }
     }
@@ -444,8 +449,10 @@ pub fn attract_ball(
                     // Frenar la velocidad de la pelota (damping fuerte)
                     velocity.linvel *= 0.85;
 
-                    // Atracción suave hacia el jugador
-                    let stick_force = direction * 8000.0;
+                    // Atracción suave hacia el jugador (escalado por tick, igual que la
+                    // atracción normal más abajo, para no aplicar un impulso gigante
+                    // cuando la pelota recién roza el radio de "pegado")
+                    let stick_force = direction * 400.0 * 0.016;
                     impulse.impulse += stick_force;
                 } else if distance < config.attract_max_distance
                     && distance > config.attract_min_distance

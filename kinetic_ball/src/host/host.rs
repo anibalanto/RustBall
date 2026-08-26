@@ -412,9 +412,25 @@ pub enum OutgoingMessage {
 // GAME SETUP
 // ============================================================================
 
-fn configure_rapier(mut rapier_config: Query<&mut RapierConfiguration>) {
+fn configure_rapier(
+    mut rapier_config: Query<&mut RapierConfiguration>,
+    mut rapier_context: Query<&mut RapierContextSimulation>,
+) {
     if let Ok(mut config) = rapier_config.single_mut() {
         config.gravity = Vec2::ZERO;
+    }
+
+    if let Ok(mut context) = rapier_context.single_mut() {
+        // Por defecto Rapier permite corregir solapamientos a hasta
+        // normalized_max_corrective_velocity * length_unit = 10.0 * 100.0 = 1000 u/s.
+        // Con la pelota tan liviana (ball_mass=0.1) frente al jugador, si el jugador
+        // queda con velocidad congelada en 0 mientras solapa la pelota (típico al
+        // acercarse "a tironcitos", soltando la tecla justo al tocar), toda esa
+        // corrección se descarga de una sola vez sobre la pelota, disparándola.
+        // Bajamos el tope bien por debajo de player_speed_walking (300) para que
+        // el solapamiento se resuelva gradualmente en varios ticks en vez de un
+        // salto explosivo.
+        context.integration_parameters.normalized_max_corrective_velocity = 1.5;
     }
 }
 

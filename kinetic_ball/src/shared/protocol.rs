@@ -303,6 +303,10 @@ pub struct GameConfig {
 
     // Velocidades básicas
     pub player_speed_walking: f32,
+    /// Aceleración/desaceleración del jugador (u/s²). Evita que la velocidad
+    /// salte en seco de 0 a máxima (o viceversa) en un solo tick, lo cual
+    /// generaba colisiones "de cero" contra la pelota al moverse a los tirones.
+    pub player_acceleration: f32,
     pub run_coeficient: f32,
     pub run_cube_extra_coeficient: f32,
     pub kick_force: f32,
@@ -385,6 +389,7 @@ impl Default for GameConfig {
 
             // Velocidades básicas
             player_speed_walking: 300.0,
+            player_acceleration: 2500.0,
             run_coeficient: 1.4,
             run_cube_extra_coeficient: 0.2,
             kick_force: 4000000.0,
@@ -400,7 +405,7 @@ impl Default for GameConfig {
             ball_restitution: 0.6, // Más rebote (arcade)
             ball_mass: 0.1,        // Más liviana (arcade)
             sphere_friction: 0.8,
-            sphere_restitution: 0.4,
+            sphere_restitution: 0.05,
 
             // Propiedades de damping
             ball_linear_damping: 1.5, // Rozamiento moderado
